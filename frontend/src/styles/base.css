@@ -1,0 +1,171 @@
+:root {
+  --bg: #f5f4ef;
+  --paper: #fffefa;
+  --ink: #263b34;
+  --muted: #747d75;
+  --line: #dfe3d9;
+  --green: #315f46;
+  --pale: #e9efe5;
+  --error: #9c4139;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  color: var(--green);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button,
+a,
+input,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #8ca68e;
+  outline-offset: 3px;
+}
+
+button {
+  border: 0;
+  border-radius: 10px;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  font-size: clamp(28px, 3.3vw, 46px);
+  line-height: 1.45;
+  letter-spacing: -1.8px;
+  font-weight: 650;
+}
+
+h2 {
+  font-size: 27px;
+  letter-spacing: -1px;
+}
+
+small {
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 27px;
+  font-weight: 750;
+  text-decoration: none;
+  letter-spacing: -1px;
+}
+
+.brand span {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  font-weight: 500;
+  border-left: 1px solid #a8b9a2;
+  padding-left: 12px;
+  width: 70px;
+  line-height: 1.6;
+}
+
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 1.3px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.primary {
+  background: var(--green);
+  color: white;
+  padding: 13px 20px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.primary:hover:not(:disabled) {
+  background: #264d38;
+}
+
+.subtle {
+  background: transparent;
+  color: var(--muted);
+  padding: 8px;
+  font-size: 12px;
+}
+
+.subtle:hover {
+  background: var(--pale);
+  color: var(--ink);
+}
+
+.status {
+  font-size: 13px;
+  line-height: 1.65;
+  min-height: 22px;
+  color: var(--error);
+  margin: 12px 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+[hidden] {
+  display: none !important;
+}

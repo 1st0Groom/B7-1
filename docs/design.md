@@ -2,7 +2,7 @@
 
 - 작성일: 2026-10-02
 - 기준: [B7-1 과제 요구사항](B7-1.md)
-- 상태: 구현 전 설계안. 아래 경로·명령·설정은 구현 목표이며 현재 제공되는 기능이 아니다.
+- 상태: 초기 구현 반영. 실행·배포 절차는 [README](../README.md)를 기준으로 한다. 실제 OpenAI 연결·외부 배포·팀 협업 실적은 별도 검증이 필요하다.
 
 ## 1. 서비스 목표와 범위
 
@@ -31,18 +31,21 @@
 | 영역 | 선택 | 목적 |
 | --- | --- | --- |
 | 서버 | Python + FastAPI + Uvicorn | 과제 필수 조건, API와 HTML을 한 서비스에서 제공 |
-| 화면 | Jinja2 + HTML/CSS + JavaScript Fetch | 별도 프런트 빌드·배포 없이 화면과 비동기 질문 처리 |
+| 화면 | React + TypeScript + React Router | 화면·컴포넌트·상태·경로를 분리 |
+| 프런트 빌드 | Vite + Node.js 24 + pnpm | 타입 검사, 개발 자동 반영, 정적 파일 빌드 |
 | 데이터 | SQLite + SQLAlchemy + Alembic | 파일 기반 영속 저장, 모델 정의와 스키마 변경 이력 관리 |
 | DB 비동기 접근 | SQLAlchemy AsyncSession + aiosqlite | 요청별 세션 분리, AI 호출과 DB 작업의 경계 명확화 |
 | 인증 | 서버 저장형 세션 + HttpOnly 쿠키 | 로그인 상태 확인, 만료·로그아웃 시 서버에서 폐기 |
 | 비밀번호 | Argon2id 해시 | 평문 비밀번호를 저장하지 않음 |
-| AI | 공급자 1개 + 서버 전용 어댑터 | 공급자별 요청·응답·오류 변환을 한 파일에 격리 |
+| AI | OpenAI API + 서버 전용 어댑터 | OpenAI 요청·응답·오류 변환을 한 파일에 격리 |
 | 검증 | pytest + HTTPX + 임시 SQLite | 인증·소유권·대화·실패 경로 검증 |
-| 배포 | Linux 서버 1대 + Docker Compose + Caddy | HTTPS, 앱 실행, DB 볼륨을 한 배포 단위로 관리 |
+| 배포 | Linux 인스턴스 1대 + Docker Compose + Caddy | 인스턴스에서 HTTPS, 앱 실행, DB 볼륨을 한 배포 단위로 관리 |
 
-FastAPI는 Jinja2 템플릿과 정적 파일 제공을 지원하므로 화면과 API를 같은 출처에서 제공하는 구성으로 시작한다. [FastAPI 템플릿 문서](https://fastapi.tiangolo.com/advanced/templates/)
+React 화면을 Vite로 빌드하고 FastAPI가 진입 HTML과 `/assets`를 제공한다. 운영에서는 화면과 API가 같은 출처를 사용한다. 개발 시 Vite 5173의 `/api` 프록시를 사용하고 FastAPI의 `APP_ORIGIN`을 `http://localhost:5173`으로 지정한다. [Vite 문서](https://vite.dev/guide/)
 
-AI 공급자·모델과 배포 서버는 팀 계정 및 예산에 따라 착수 시 확정한다. 최초 구현은 선택한 공급자 하나만 지원한다. 정확한 패키지 버전은 초기 실행 검증 후 의존성 파일에 고정한다.
+AI 공급자는 **OpenAI**로 확정하며, 최초 구현은 OpenAI API만 지원한다. 모델은 팀 계정의 사용 가능 모델과 예산에 따라 선정하고 `AI_MODEL`로 설정한다. API 키는 공식 SDK의 환경 변수 이름인 `OPENAI_API_KEY`로 서버에 주입한다. [OpenAI 공식 빠른 시작 문서](https://developers.openai.com/api/docs/quickstart)
+
+배포는 **Linux 인스턴스 1대에 Docker Compose로 구성**한다. `compose.yaml`에서 앱과 Caddy, 영속 볼륨을 관리한다. 인스턴스 제공 업체·사양·도메인은 배포 준비 시 확정한다. 정확한 패키지 버전은 초기 실행 검증 후 의존성 파일에 고정한다.
 
 ## 3. 시스템 구조
 
@@ -50,20 +53,20 @@ AI 공급자·모델과 배포 서버는 팀 계정 및 예산에 따라 착수 
 flowchart LR
     U[웹 브라우저] -->|HTTPS / 동일 출처| P[Caddy]
     P --> W[FastAPI / Uvicorn]
-    W --> V[Jinja2 / 정적 파일]
+    W --> V[React 빌드 / 정적 파일]
     W --> A[인증 서비스]
     W --> C[대화 서비스]
     A --> D[(SQLite / 영속 볼륨)]
     C --> D
     C --> G[AI 어댑터]
-    G -->|서버 API 키| E[외부 AI API]
+    G -->|서버 API 키| E[OpenAI API]
     W --> L[구조화된 서버 로그]
 ```
 
 - **라우터**: 입력 검증, 인증 의존성 적용, HTTP 응답 변환.
 - **인증 서비스**: 사용자 생성, 비밀번호 검증, 세션 발급·조회·폐기.
 - **대화 서비스**: 대화 소유권 확인, 요청 중복 확인, 문맥 조립, AI 호출, 결과 저장.
-- **AI 어댑터**: 공급자 API 호출, 전체 호출 시간 제한, 결과 정규화, 오류 분류.
+- **AI 어댑터**: OpenAI API 호출, 전체 호출 시간 제한, 결과 정규화, 오류 분류.
 - **DB 계층**: SQLAlchemy 모델과 요청별 세션. 초기에는 별도 Repository 계층을 만들지 않는다.
 - **공통 계층**: 설정, 요청 식별자, 로그, 예외 처리.
 
@@ -73,7 +76,7 @@ flowchart LR
 
 | 화면 | URL | 구성 및 동작 |
 | --- | --- | --- |
-| 회원가입 | `/signup` | 이메일·비밀번호 입력, 검증 안내, 완료 후 로그인으로 이동 |
+| 회원가입 | `/signup` | 아이디·비밀번호 입력, 검증 안내, 완료 후 로그인으로 이동 |
 | 로그인 | `/login` | 로그인 실패 안내, 성공 후 `/chat` 이동 |
 | 채팅 | `/chat` | 대화 목록, 새 대화, 메시지 영역, 질문 입력, 전송, 로그아웃 |
 
@@ -95,14 +98,14 @@ flowchart LR
 - 전송 중: 현재 대화의 전송 버튼을 비활성화하고 “답변을 생성하고 있어요”를 표시한다.
 - 성공: 저장된 질문·응답과 시각을 표시한다. AI 출력은 `textContent`로 렌더링한다.
 - 실패: 해당 질문에 오류 안내와 재시도 버튼을 표시한다. 실패 안내를 AI 답변으로 취급하지 않는다.
-- 통신 끊김: 처리 결과가 불명확하다고 안내하고 기록을 재조회한다. 확인 전에는 새 요청으로 자동 재전송하지 않는다.
+- 통신 끊김: 처리 결과가 불명확하다고 안내하고 기록을 재조회한다. 확인 전에는 새 요청으로 자동 재전송하지 않는다. 기록이 없으면 사용자가 결과 확인 버튼을 눌러 같은 UUID로 확인한다. `pending`은 2초마다 최대 120초 조회한 뒤 수동 확인으로 전환한다.
 - 인증 만료: API의 `401`을 받으면 로그인으로 이동한다.
 - HTML `/chat` 비인증 요청은 로그인으로 리다이렉트하고, API 비인증 요청은 JSON `401`로 응답한다.
 
 ## 5. 인증 및 접근 제어
 
-1. 이메일은 앞뒤 공백 제거·소문자 정규화 후 유일하게 저장한다. 형식·최대 254자를 검증한다.
-2. 비밀번호는 10~128자로 검증하고 Argon2id 해시만 저장한다. 비밀번호를 임의로 trim하지 않는다.
+1. 새 가입 아이디는 영문·숫자·밑줄(`_`) 3~32자로 제한한다. 앞뒤 공백 제거·소문자 정규화 후 유일하게 저장한다.
+2. 비밀번호는 조합 조건 없이 10~128자로 검증하고 Argon2id 해시만 저장한다. 비밀번호를 임의로 trim하지 않는다.
 3. 로그인 성공 시 암호학적 난수 32바이트 이상의 세션 토큰을 새로 발급한다.
 4. 브라우저에는 토큰을 쿠키로, DB에는 토큰의 SHA-256 해시와 사용자·만료 시각을 저장한다.
 5. 쿠키는 `HttpOnly`, `SameSite=Lax`, `Path=/`, 운영 환경에서 `Secure`를 적용한다. 만료는 발급 후 24시간으로 고정한다.
@@ -125,7 +128,7 @@ erDiagram
     conversations ||--o{ chat_turns : contains
     users {
         integer id PK
-        text email UK
+        text username UK
         text password_hash
         datetime created_at
     }
@@ -182,7 +185,7 @@ sequenceDiagram
     participant B as 브라우저
     participant F as FastAPI
     participant D as SQLite
-    participant A as AI API
+    participant A as OpenAI API
     B->>F: POST 질문 + client_request_id
     F->>D: 인증·소유권·중복 요청 확인
     F->>D: 질문을 pending으로 저장 후 커밋
@@ -204,7 +207,7 @@ sequenceDiagram
 - 이전 문답은 ID 기준으로 최근 데이터를 선택한 뒤 오래된 순서로 정렬한다. 실패·대기 문답은 제외한다.
 - 이전 문답의 질문·응답 합계는 최대 12,000자로 제한한다. 초과하면 가장 오래된 문답부터 쌍 단위로 제외한다.
 - 현재 질문은 최대 2,000자, 모델 출력은 최대 1,000토큰으로 설정한다.
-- 문자 수 제한은 비용·크기 제한의 1차 기준이다. 선택 모델의 토크나이저로 최종 입력 토큰을 계산하고 출력 여유를 확보하도록 오래된 문답을 추가 제거한다.
+- 문자 수 제한은 비용·크기 제한의 1차 기준이다. tiktoken으로 본문 토큰을 계산하고 메시지 형식과 출력 여유를 예약해 오래된 문답을 추가 제거한다. API 집계와의 차이를 고려해 `AI_CONTEXT_WINDOW_TOKENS`는 선택 모델의 한도 이하로 보수적으로 설정한다.
 - 모든 이전 문답을 제거해도 한도를 넘으면 `422 CONTEXT_TOO_LARGE`로 실패 기록을 남기고 AI를 호출하지 않는다.
 - 서버 DB에서 문맥을 만들며, 클라이언트가 보낸 과거 메시지나 시스템 지침은 받지 않는다.
 
@@ -217,7 +220,7 @@ AI 전체 호출 제한은 30초, 자동 재시도는 0회로 둔다. 어댑터 
 - 확인된 실패 후 사용자가 누르는 재시도는 새 UUID를 만든다. 중복 전송과 의도적인 재시도를 구분한다.
 - 동시 삽입의 UNIQUE 충돌은 롤백 후 기존 행을 다시 조회해 위 규칙으로 처리한다.
 - 요청 취소를 감지하면 가능한 경우 `REQUEST_INTERRUPTED`로 실패를 저장한다. 프로세스 종료처럼 정리가 불가능한 경우를 위해 시작 시 남은 `pending`을 실패로 복구한다.
-- 실행 중에는 90초 이상 지난 `pending`을 주기적으로 실패 처리한다. 정상 완료와 복구 모두 `WHERE status='pending'` 조건으로 갱신해 이미 확정된 결과를 덮어쓰지 않는다.
+- 실행 중에는 15초마다 90초 이상 지난 `pending`을 실패 처리한다. 정상 완료와 복구 모두 `WHERE status='pending'` 조건으로 갱신해 이미 확정된 결과를 덮어쓰지 않는다. 갱신 후 저장된 상태를 다시 확인하므로 복구가 먼저 완료되면 늦은 성공 응답도 기존 실패 결과를 반환한다.
 - 이 방식은 중복 AI 호출을 줄이지만 공급자 호출과 DB 기록 사이의 정확히 한 번 실행을 보장하지 않는다. DB 저장 실패 뒤 새 키로 재시도하면 추가 호출 비용이 발생할 수 있다.
 
 ## 8. API 계약
@@ -226,10 +229,10 @@ API 접두사는 `/api`로 한다. 인증은 세션 쿠키를 사용하며 인�
 
 | 메서드 | 경로 | 인증 | 요청 / 성공 응답 |
 | --- | --- | --- | --- |
-| POST | `/api/auth/signup` | 불필요 | `{email, password}` / `201 {id, email}` |
-| POST | `/api/auth/login` | 불필요 | `{email, password}` / `200 {id, email}` + 세션 쿠키 |
+| POST | `/api/auth/signup` | 불필요 | `{username, password}` / `201 {id, username}` |
+| POST | `/api/auth/login` | 불필요 | `{username, password}` / `200 {id, username}` + 세션 쿠키 |
 | POST | `/api/auth/logout` | 필요 | 본문 없음 / `204`, 세션 폐기 |
-| GET | `/api/me` | 필요 | `200 {id, email}` |
+| GET | `/api/me` | 필요 | `200 {id, username}` |
 | POST | `/api/conversations` | 필요 | `{}` / `201 {id, title, created_at}` |
 | GET | `/api/conversations?limit=20&offset=0` | 필요 | `200 {items, limit, offset}`, `updated_at DESC, id DESC` |
 | GET | `/api/conversations/{id}/turns?limit=50&before_id=100` | 필요 | `200 {items, next_before_id}`, 최근 페이지를 선택 후 ID 오름차순 표시 |
@@ -291,7 +294,7 @@ Cookie: session=<로그인 시 발급된 토큰>
 
 | 상황 | HTTP / 코드 | DB 및 UI 처리 |
 | --- | --- | --- |
-| 이메일 중복 | `409 EMAIL_ALREADY_EXISTS` | 계정 생성 취소, 입력 안내 |
+| 아이디 중복 | `409 USERNAME_ALREADY_EXISTS` | 계정 생성 취소, 입력 안내 |
 | 잘못된 로그인·만료 | `401 AUTH_REQUIRED` 또는 `INVALID_CREDENTIALS` | 재로그인 안내 |
 | 출처 검증 실패 | `403 ORIGIN_REJECTED` | 상태 변경 실행 안 함 |
 | 다른 사용자 대화·없는 대화 | `404 CONVERSATION_NOT_FOUND` | 접근 불가 안내 |
@@ -321,7 +324,7 @@ request_completed request_id=req_7f402a status_code=200 latency_ms=1290
 
 API 키, 비밀번호, 세션 원문, 공급자 응답 원문은 로그에 남기지 않는다. 질문·답변은 DB에 보관하고 운영 로그에는 식별자와 상태만 남긴다. 공급자 예외는 원문을 그대로 출력하지 않고 분류한 오류 코드와 안전한 메타데이터만 기록한다.
 
-## 10. 구현할 디렉터리 구조
+## 10. 디렉터리 구조
 
 ```text
 app/
@@ -330,20 +333,40 @@ app/
   database.py              # 엔진, 세션, SQLite 설정
   models.py                # users / sessions / conversations / chat_turns
   schemas.py               # 입력·출력·오류 스키마
-  dependencies.py          # 인증 사용자, DB 세션
+  dependencies.py          # 인증 사용자·DB·설정·AI 의존성 주입
   routers/
-    pages.py               # HTML 화면
-    auth.py                # 가입·로그인·로그아웃·내 정보
-    chat.py                # 대화·질문·내 로그
+    __init__.py            # /api 및 페이지·health 라우터 등록
+    pages.py               # React 진입 HTML, 직접 접속 세션 확인
+    auth.py                # 가입·로그인·로그아웃
+    conversations.py       # 대화 생성·목록·문답 API
+    me.py                  # 내 정보·전체 대화 기록
     health.py
   services/
     auth.py                # 비밀번호, 세션 수명
+    conversations.py       # 대화 소유권·생성·페이지 조회
     chat.py                # 상태 전이, 문맥, 중복 방지
-    ai.py                  # 공급자 1개 연동, 타임아웃
+    ai.py                  # OpenAI API 연동, 타임아웃
   middleware.py            # 요청 ID, 출처 검사, 운영 로그
   errors.py                # 공통 오류 변환
-  templates/               # base / signup / login / chat
-  static/                  # CSS, 화면용 JS
+frontend/
+  package.json             # pnpm 명령, 프런트 의존성
+  pnpm-lock.yaml           # 프런트 의존성 버전 고정
+  vite.config.ts           # React 빌드, 개발 API 프록시
+  src/
+    main.tsx               # React 진입점
+    App.tsx                # /login, /signup, /chat 라우팅
+    api/                   # HTTP 통신, API 타입, 오류
+    components/            # 브랜드, 인증 보호
+    pages/                 # AuthPage / ChatPage
+    chat/
+      useChat.ts           # 비동기 흐름, pending polling 수명
+      state.ts             # 순수 상태 전이, 응답 병합, 경합 방어
+      Sidebar.tsx          # 대화 목록, 계정
+      TurnList.tsx         # 문답 및 오류 렌더링
+      Composer.tsx         # 질문 입력
+      Welcome.tsx          # 시작 안내
+    styles/                # base / auth / chat CSS
+  dist/                    # 생성된 빌드 결과, Git 제외
 migrations/                # Alembic 스키마 이력
 scripts/
   check_logs.sql           # 평가용 읽기 쿼리
@@ -355,7 +378,8 @@ docs/
 .env.example
 .gitignore
 .dockerignore
-pyproject.toml             # 검증한 의존성 및 버전
+pyproject.toml             # 프로젝트와 의존성 정의
+uv.lock                    # 검증한 의존성 버전 고정
 Dockerfile
 compose.yaml
 Caddyfile
@@ -369,36 +393,41 @@ README.md                  # 실제 실행·배포·평가 절차
 | `APP_ENV` | `development` 또는 `production` |
 | `APP_ORIGIN` | 로컬 `http://localhost:8000`, 운영은 실제 HTTPS 출처 |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./data/app.db`, 컨테이너에서는 `/data/app.db`를 사용 |
-| `AI_API_KEY` | 선택 공급자의 키, 서버 환경에서만 주입 |
-| `AI_MODEL` | 공급자·모델 확정 후 설정, 누락 시 시작 실패 |
+| `OPENAI_API_KEY` | OpenAI API 키, 서버 환경에서만 주입 |
+| `AI_MODEL` | 사용할 OpenAI 모델 ID, 모델 선정 후 설정하며 누락 시 시작 실패 |
 | `AI_TIMEOUT_SECONDS` | `30` |
 | `AI_MAX_OUTPUT_TOKENS` | `1000` |
+| `AI_CONTEXT_WINDOW_TOKENS` | `8192`; 선택 모델 한도 이하의 입력·출력 예산 |
+| `AI_TOKEN_ENCODING` | 기본 자동 추론; 필요 시 tiktoken 인코딩 명시 |
 | `CHAT_CONTEXT_TURNS` | `5` |
 | `CHAT_CONTEXT_MAX_CHARS` | `12000` |
 | `SESSION_TTL_SECONDS` | `86400` |
 | `COOKIE_SECURE` | 로컬 HTTP `false`, 운영에서는 반드시 `true` |
 | `LOG_LEVEL` | `INFO` |
+| `APP_DOMAIN` | 운영 Compose의 HTTPS 도메인 |
 
 `.env.example`에는 변수 이름·비밀이 아닌 기본값·빈 키만 넣는다. `.gitignore`와 `.dockerignore`에는 `.env`, `.env.*`를 제외하되 `.env.example`은 예외로 둔다. 실제 DB 파일·WAL·백업·쿠키 파일·로그도 커밋 및 이미지 빌드 대상에서 제외한다. 쿠키용 난수 세션은 DB 조회로 검증하므로 별도 JWT 서명 키를 사용하지 않는다.
 
-구현 후 제공할 로컬 실행 절차:
+로컬 실행 절차:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[dev]'
+npm install --global pnpm@12.3.4
+pnpm --dir frontend install --frozen-lockfile
+pnpm --dir frontend build
+uv sync --frozen --extra dev
+# 기존 .env가 있다면 복사하지 않는다.
 cp .env.example .env
-# .env에 실제 공급자 키와 모델을 설정한다.
+# .env에 OPENAI_API_KEY와 AI_MODEL을 설정한다.
 mkdir -p data
-alembic upgrade head
-uvicorn app.main:app --reload
+uv run --frozen alembic upgrade head
+uv run --frozen uvicorn app.main:create_app --factory --reload --no-access-log
 ```
 
 운영 배포 절차:
 
-1. Linux 서버와 도메인을 준비하고 DNS를 연결한다. 외부에는 80/443만 공개하고 관리용 SSH 접근은 제한한다.
+1. Linux 인스턴스에 Docker Engine과 Docker Compose를 설치하고 도메인의 DNS를 연결한다. 외부에는 80/443만 공개하고 관리용 SSH 접근은 제한한다.
 2. 서버에 저장소를 내려받아 운영 `.env`를 작성한다. 키를 이미지에 포함하지 않는다.
-3. Compose에서 Caddy와 앱을 실행한다. 앱은 내부 포트로만 노출하고 Uvicorn worker는 1개로 고정한다.
+3. Docker의 Node 빌드 단계에서 React를 빌드하고 결과를 Python 이미지에 복사한다. 인스턴스의 `compose.yaml`로 Caddy와 앱을 실행한다. OpenAI API 키는 앱 컨테이너에만 주입한다. 앱은 내부 포트로만 노출하고 Uvicorn worker는 1개로 고정한다.
 4. 앱 DB는 `/data` 영속 볼륨에 연결한다. Caddy 인증서 데이터도 영속 볼륨에 보관한다.
 5. 최초 배포 및 변경 시 마이그레이션을 먼저 실행하고 앱을 시작한다. 스키마 변경 전에는 SQLite backup API로 백업한다.
 6. HTTPS·쿠키·health·실제 AI 응답을 외부 네트워크에서 확인하고 서비스 URL과 GitHub URL을 README에 기록한다.
@@ -458,7 +487,7 @@ LIMIT 20;
 
 | 단계 | 시간 | 산출물 / 완료 조건 |
 | --- | ---: | --- |
-| 1. 범위·설계·기반 구성 | 12h | 모델·공급자 선정, 앱 실행, DB 마이그레이션, 초기 외부 배포 |
+| 1. 범위·설계·기반 구성 | 12h | OpenAI 모델 선정, 앱 실행, DB 마이그레이션, 인스턴스·Compose 초기 배포 |
 | 2. 사용자 인증 | 18h | 가입·로그인·로그아웃·출처 검사·접근 제어 검증 |
 | 3. 채팅 화면·대화방 | 18h | 반응형 화면, 대화 생성·목록·기록 조회 |
 | 4. AI·문맥·저장 | 24h | 실제 응답, 최근 문맥, 상태 전이, 중복 방지 |
