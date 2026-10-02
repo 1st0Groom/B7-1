@@ -127,6 +127,8 @@ docker compose up -d
 | GET | `/api/me/chats?limit=20&before_id=100` | 내 전체 문답 조회 |
 | GET | `/health/live`, `/health/ready` | 프로세스 및 DB 준비 상태 |
 
+새 대화는 생성 응답을 바로 반영합니다. 질문 성공 뒤에는 반환된 문답을 표시하고 대화 목록만 갱신합니다. 기록 재조회는 실패·불명확한 결과를 복구할 때 수행합니다. 전체 AI 생성 시간 제한은 채팅 서비스가 담당하고, 어댑터는 SDK 통신 시간 제한과 오류 변환을 담당합니다. 필수 환경 변수는 시작 시 검증하고 `/health/ready`는 DB 준비 상태를 검사합니다.
+
 같은 대화의 같은 UUID·질문은 저장 결과를 재사용하며 AI를 재호출하지 않습니다. 진행 중인 요청은 `409 CHAT_IN_PROGRESS`, 다른 질문에 같은 키를 쓰면 `409 IDEMPOTENCY_CONFLICT`입니다. 실패 후 새로 질문할 때는 새 UUID를 사용합니다. 프런트는 통신 오류가 나면 먼저 기록을 확인하고, 여전히 불명확하면 사용자가 결과 확인 버튼을 눌러 **같은 UUID**로 확인하도록 합니다. 진행 중인 기록은 2초 간격으로 최대 120초 재조회하고 이후 수동 확인으로 전환합니다.
 
 로컬 평가 예시(예시 비밀번호는 운영 계정에 사용하지 마세요):
@@ -158,15 +160,35 @@ sqlite3 data/app.db '.parameter init' '.parameter set :user_id 1' '.read scripts
 | API URL·HTTP 오류·응답 타입 | `frontend/src/api/` |
 | 로그인·가입 화면 | `frontend/src/pages/AuthPage.tsx` |
 | 채팅 화면 조립 | `frontend/src/pages/ChatPage.tsx` |
-| 질문 전송·조회·재시도·polling | `frontend/src/chat/useChat.ts` |
+| 질문 전송·조회·재시도 흐름 조립 | `frontend/src/chat/useChat.ts` |
+| 대화 목록·페이지 조회 | `frontend/src/chat/useConversationList.ts` |
+| 자동 조회 간격·종료·타이머 정리 | `frontend/src/chat/usePendingPolling.ts` |
+| 전송 결과 분류·API 계약 | `frontend/src/chat/requests.ts`, `ports.ts` |
 | 대화 상태·응답 병합·오래된 응답 무시 | `frontend/src/chat/state.ts` |
 | 사이드바·메시지·입력창 | `frontend/src/chat/Sidebar.tsx`, `TurnList.tsx`, `Composer.tsx` |
 | 화면 스타일 | `frontend/src/styles/` |
 | API 등록·HTTP 요청 및 응답 | `app/routers/` |
-| 대화 생성·소유권·페이지 조회 | `app/services/conversations.py` |
-| AI 호출·저장·중복 요청 처리 | `app/services/chat.py` |
+| 대화 생성·소유권·페이지 조회 | `app/repositories/conversations.py` |
+| AI 생성·저장·중복 요청의 처리 순서 | `app/services/chat.py` |
+| 채팅 SQL·트랜잭션·동시성·중단 복구 | `app/repositories/chat.py` |
+| AI·저장소 인터페이스와 불변 문답 데이터 | `app/ports.py` |
+| 실제 구현 연결·자원 수명 | `app/main.py` |
 
 React Router가 화면 이동을 관리하고 React가 상태에 따라 DOM을 렌더링합니다. FastAPI의 `pages.py`는 직접 접속할 때 React 진입 HTML을 제공하며 `/chat`의 세션도 검사합니다. `/api` 접두사와 서버 라우터 등록은 `app/routers/__init__.py`에서 관리합니다. API 자체의 인증·소유권 검사는 화면 보호와 별개로 항상 적용됩니다.
+
+## SOLID 적용 경계
+
+| 원칙 | 현재 적용 |
+| --- | --- |
+| 단일 책임 (S) | UI 표시, 목록 조회, polling, 전송 결과 분류를 분리합니다. 서버의 채팅 처리 순서와 SQL·트랜잭션도 분리합니다. |
+| 개방·폐쇄 (O) | `ChatService`는 AI 공급자·저장 구현을 바꿀 때 수정하지 않습니다. 계약을 구현하고 `main.py`의 조립 부분에서 연결합니다. |
+| 리스코프 치환 (L) | SQL 저장소와 메모리 대역에 같은 계약 테스트를 적용합니다. 중복 키, 소유권, 실패 이력 제외, 최종 상태 보존을 확인합니다. |
+| 인터페이스 분리 (I) | 답변 생성과 자원 종료, 채팅 처리와 중단 복구의 계약을 나눕니다. Sidebar에는 표시할 목록과 필요한 상태·콜백만 전달합니다. |
+| 의존성 역전 (D) | 서버 서비스는 `ChatStore`·`ReplyGenerator`에 의존합니다. 프런트 훅은 API 구현과 인증 만료 콜백을 주입받고 라우터나 fetch 구현에 직접 의존하지 않습니다. |
+
+`reserve`는 소유권·중복 키·진행 중 문답을 확인하고 새 질문을 커밋한 뒤 반환합니다. 새 요청에만 admission 콜백을 실행하므로 기존 키 조회가 요청 한도를 다시 소비하지 않습니다. `finish`는 pending 상태만 변경하고 DB에 최종 저장된 결과를 반환합니다. 이 경계를 구현체가 지켜야 AI 호출 중 트랜잭션을 열어 두지 않고, 늦은 응답이 복구된 실패 상태를 덮어쓰는 것도 막을 수 있습니다.
+
+인증과 단순 대화 조회에는 기존 서비스를 사용합니다. 별도 추상화가 필요한 채팅 처리 경계부터 적용했으며, 모든 함수를 클래스나 인터페이스로 바꾸지는 않습니다.
 
 ## 검증
 

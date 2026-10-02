@@ -1,5 +1,3 @@
-import asyncio
-
 import tiktoken
 from openai import APIError, APITimeoutError, AsyncOpenAI
 
@@ -61,14 +59,13 @@ class OpenAIAdapter:
     async def generate(self, history, question):
         messages = self.build_context(history, question)
         try:
-            async with asyncio.timeout(self.settings.ai_timeout_seconds):
-                result = await self.client.responses.create(
-                    model=self.settings.ai_model,
-                    input=messages,
-                    max_output_tokens=self.settings.ai_max_output_tokens,
-                    store=False,
-                )
-        except (TimeoutError, APITimeoutError):
+            result = await self.client.responses.create(
+                model=self.settings.ai_model,
+                input=messages,
+                max_output_tokens=self.settings.ai_max_output_tokens,
+                store=False,
+            )
+        except APITimeoutError:
             raise AppError("AI_TIMEOUT") from None
         except APIError as exc:
             event(

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { APIError, conversationsAPI, explain } from "../api/client";
+import { APIError, explain } from "../api/errors";
 import type { SendRequest } from "../api/types";
 import {
   chatReducer,
@@ -11,15 +10,16 @@ import {
   type ChatState,
 } from "./state";
 
-export function useChat() {
-  const navigate = useNavigate();
+import type { ChatGateway } from "./ports";
+import { submitTurn } from "./requests";
+import { useConversationList } from "./useConversationList";
+import { usePendingPolling } from "./usePendingPolling";
+
+export function useChat(api: ChatGateway, onUnauthorized: () => void) {
   const [state, setState] = useState(initialState);
   const [question, setQuestion] = useState("");
-  const [pollEpoch, setPollEpoch] = useState(0);
   const current = useRef(state);
   const mounted = useRef(false);
-  const listRevision = useRef(0);
-  const deadline = useRef(0);
 
   // Async actions see the latest state immediately, including the busy lock.
   const dispatch = useCallback((action: Action) => {
@@ -34,39 +34,16 @@ export function useChat() {
   const showError = useCallback(
     (error: unknown) => {
       if (!mounted.current) return;
-      if (error instanceof APIError && error.status === 401)
-        void navigate("/login", { replace: true });
+      if (error instanceof APIError && error.status === 401) onUnauthorized();
       else patch({ status: explain(error) });
     },
-    [navigate, patch],
+    [onUnauthorized, patch],
   );
-  const resetPolling = useCallback(() => {
-    deadline.current = Date.now() + 120000;
-    if (mounted.current) setPollEpoch((epoch) => epoch + 1);
-  }, []);
-  const loadConversations = useCallback(
-    async (append = false) => {
-      const revision = ++listRevision.current;
-      const page = await conversationsAPI.list(
-        append ? current.current.conversations.length : 0,
-      );
-      if (!mounted.current || revision !== listRevision.current) return;
-      patch({
-        conversations: append
-          ? [...current.current.conversations, ...page.items]
-          : page.items,
-        hasMore: page.items.length === 100,
-      });
-    },
-    [patch],
-  );
+  const conversations = useConversationList(api, showError);
   const refreshTurns = useCallback(
     async (id: number, older = false) => {
       const snapshot = current.current;
-      const page = await conversationsAPI.history(
-        id,
-        older ? snapshot.beforeId : null,
-      );
+      const page = await api.history(id, older ? snapshot.beforeId : null);
       if (
         !mounted.current ||
         current.current.current !== id ||
@@ -87,52 +64,39 @@ export function useChat() {
         );
       }
     },
-    [dispatch],
+    [api, dispatch],
   );
 
   useEffect(() => {
     mounted.current = true;
-    void loadConversations().catch(showError);
     return () => {
       mounted.current = false;
-      listRevision.current++;
     };
-  }, [loadConversations, showError]);
-
-  // Each completed read schedules the next one; switching pages cancels the timer.
-  useEffect(() => {
-    const id = state.current;
-    if (id === null || !isPending(state) || state.busy) return;
-    if (Date.now() >= deadline.current) {
+  }, []);
+  const pollError = useCallback(
+    (error: unknown) => {
+      showError(error);
+      patch({ showRefresh: true });
+    },
+    [showError, patch],
+  );
+  const pollTimeout = useCallback(
+    () =>
       patch({
         status: "아직 처리 상태를 확인 중입니다. 잠시 후 다시 확인해 주세요.",
         showRefresh: true,
-      });
-      return;
-    }
-    let active = true;
-    const timer = setTimeout(() => {
-      void refreshTurns(id).catch((error) => {
-        if (active) {
-          showError(error);
-          patch({ showRefresh: true });
-        }
-      });
-    }, 2000);
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [
-    state.current,
-    state.revision,
-    state.turns,
-    state.busy,
-    pollEpoch,
-    refreshTurns,
-    patch,
-    showError,
-  ]);
+      }),
+    [patch],
+  );
+  const resetPolling = usePendingPolling({
+    conversationId: state.current,
+    revision: state.revision,
+    pending: isPending(state),
+    paused: state.busy,
+    refresh: refreshTurns,
+    onError: pollError,
+    onTimeout: pollTimeout,
+  });
 
   async function select(id: number) {
     resetPolling();
@@ -151,9 +115,10 @@ export function useChat() {
     }
   }
   async function create() {
-    const conversation = await conversationsAPI.create();
-    await loadConversations();
-    await select(conversation.id);
+    const conversation = await api.create();
+    conversations.add(conversation);
+    resetPolling();
+    dispatch({ type: "select", id: conversation.id });
     return conversation.id;
   }
   async function withBusy(action: () => Promise<unknown>) {
@@ -169,45 +134,52 @@ export function useChat() {
   }
   async function send(id: number, payload: SendRequest) {
     patch({ status: "답변을 생성하고 있어요…" });
-    try {
-      const turn = await conversationsAPI.send(id, payload);
-      dispatch({ type: "result", id, turn });
-      if (mounted.current && current.current.current === id) {
+    const outcome = await submitTurn(api, id, payload);
+    if (!mounted.current) return;
+    resetPolling();
+    if (outcome.kind === "succeeded") {
+      dispatch({ type: "result", id, turn: outcome.turn });
+      if (current.current.current === id) {
         setQuestion((value) =>
           value.trim() === payload.question ? "" : value,
         );
         patch({ status: "" });
       }
-    } catch (error) {
-      if (
-        !(error instanceof APIError) ||
-        ["DB_UNAVAILABLE", "INTERNAL_ERROR"].includes(error.code ?? "")
-      ) {
+    } else {
+      if (outcome.kind === "uncertain") {
         dispatch({ type: "uncertain", id, payload });
         if (current.current.current === id)
           patch({
             status: "연결이 끊겨 처리 결과를 확인하고 있어요.",
             showRefresh: true,
           });
-      } else if (current.current.current === id) showError(error);
-    } finally {
-      if (mounted.current) {
-        resetPolling();
-        if (current.current.current === id) {
-          try {
-            await refreshTurns(id);
-          } catch (error) {
-            showError(error);
-            patch({ showRefresh: true });
-          }
-        }
+      } else if (outcome.error.status === 401) {
+        showError(outcome.error);
+        return;
+      } else if (current.current.current === id) showError(outcome.error);
+      // Failed requests can also have a persisted turn; fetch it for recovery/retry.
+      if (current.current.current === id) {
         try {
-          await loadConversations();
+          await refreshTurns(id);
         } catch (error) {
-          showError(error);
+          if (
+            (error instanceof APIError && error.status === 401) ||
+            !current.current.status
+          )
+            showError(error);
+          patch({ showRefresh: true });
         }
       }
     }
+    const revision = current.current.revision;
+    void conversations.load().catch((error: unknown) => {
+      if (!mounted.current) return;
+      if (error instanceof APIError && error.status === 401) showError(error);
+      else if (current.current.revision === revision && !current.current.status)
+        patch({
+          status: `대화 목록을 새로 고치지 못했습니다. ${explain(error)}`,
+        });
+    });
   }
   function submit() {
     if (isBlocked(current.current) || !question.trim()) return;
@@ -239,6 +211,8 @@ export function useChat() {
   }
   return {
     state,
+    conversations: conversations.items,
+    hasMore: conversations.hasMore,
     question,
     setQuestion,
     blocked: isBlocked(state),
@@ -252,6 +226,6 @@ export function useChat() {
       if (state.current !== null)
         void refreshTurns(state.current, true).catch(showError);
     },
-    more: () => void loadConversations(true).catch(showError),
+    more: () => void conversations.load(true).catch(showError),
   };
 }

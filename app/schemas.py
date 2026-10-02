@@ -1,7 +1,8 @@
 from datetime import UTC, datetime
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
 
 class Credentials(BaseModel):
@@ -30,32 +31,12 @@ class EmptyInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-def timestamp(value: datetime | None):
-    return value.replace(tzinfo=UTC).isoformat().replace("+00:00", "Z") if value else None
+def as_utc(value: datetime) -> datetime:
+    # SQLite returns naive UTC dates; domain records may already have a timezone.
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
-def turn_json(turn):
-    return {
-        name: getattr(turn, name)
-        for name in (
-            "id",
-            "conversation_id",
-            "client_request_id",
-            "question",
-            "answer",
-            "status",
-            "error_code",
-        )
-    } | {"created_at": timestamp(turn.created_at), "completed_at": timestamp(turn.completed_at)}
-
-
-def conversation_json(conversation):
-    return {
-        "id": conversation.id,
-        "title": conversation.title,
-        "created_at": timestamp(conversation.created_at),
-        "updated_at": timestamp(conversation.updated_at),
-    }
+UTCDateTime = Annotated[datetime, AfterValidator(as_utc)]
 
 
 class UserOutput(BaseModel):
@@ -64,13 +45,17 @@ class UserOutput(BaseModel):
 
 
 class ConversationOutput(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     title: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
 
 
 class TurnOutput(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     conversation_id: int
     client_request_id: UUID
@@ -78,8 +63,8 @@ class TurnOutput(BaseModel):
     answer: str | None
     status: str
     error_code: str | None
-    created_at: datetime
-    completed_at: datetime | None
+    created_at: UTCDateTime
+    completed_at: UTCDateTime | None
 
 
 class ConversationList(BaseModel):
@@ -89,6 +74,8 @@ class ConversationList(BaseModel):
 
 
 class TurnList(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     items: list[TurnOutput]
     next_before_id: int | None
 

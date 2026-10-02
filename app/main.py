@@ -12,31 +12,41 @@ from app.database import Database
 from app.errors import AppError, error_response
 from app.logging import configure, event
 from app.middleware import RateLimiter, RequestMiddleware
+from app.ports import AIProvider, PendingRecovery, StorageError
+from app.repositories.chat import SQLAlchemyChatStore
 from app.routers import register_routes
 from app.routers.pages import FRONTEND_DIST
 from app.schemas import ErrorOutput
 from app.services.ai import OpenAIAdapter
-from app.services.chat import recover_pending
+from app.services.chat import ChatService
 
 
-def create_app(settings=None, ai=None):
+def create_app(settings: Settings | None = None, ai: AIProvider | None = None):
     settings = settings or Settings()
     configure(settings.log_level)
     db = Database(settings.database_url)
+    store = SQLAlchemyChatStore(db)
+    recovery: PendingRecovery = store
 
     async def recovery_loop():
         while True:
             await asyncio.sleep(15)
             try:
-                await recover_pending(db)
-            except SQLAlchemyError:
+                await recovery.recover_pending()
+            except StorageError:
                 event("db_save_failed", phase="recovery")
 
     @asynccontextmanager
     async def lifespan(app):
         try:
-            app.state.ai = ai or OpenAIAdapter(settings)
-            await recover_pending(db, all_pending=True)
+            app.state.ai = ai if ai is not None else OpenAIAdapter(settings)
+            app.state.chat = ChatService(
+                store,
+                app.state.ai,
+                settings,
+                lambda user_id: app.state.limiter.check(("chat", user_id)),
+            )
+            await recovery.recover_pending(all_pending=True)
             task = asyncio.create_task(recovery_loop())
             try:
                 yield
@@ -61,6 +71,7 @@ def create_app(settings=None, ai=None):
     )
     app.state.settings = settings
     app.state.db = db
+    app.state.recovery = recovery
     app.state.limiter = RateLimiter()
     app.add_middleware(RequestMiddleware, settings=settings)
 

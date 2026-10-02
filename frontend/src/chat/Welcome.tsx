@@ -21,7 +21,7 @@ export function Welcome({
   onSuggest: (question: string) => void;
 }) {
   return (
-    <div id="welcome" className="welcome">
+    <div className="welcome">
       <div className="welcome-mark" aria-hidden="true">
         ✳
       </div>

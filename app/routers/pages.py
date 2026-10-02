@@ -26,12 +26,8 @@ async def home(request: Request):
 
 
 @router.get("/login", name="pages:login")
-async def login():
-    return frontend()
-
-
 @router.get("/signup", name="pages:signup")
-async def signup():
+async def auth_page():
     return frontend()
 
 

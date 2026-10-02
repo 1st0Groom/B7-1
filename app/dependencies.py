@@ -8,8 +8,8 @@ from app.config import Settings
 from app.database import Database
 from app.middleware import RateLimiter
 from app.models import User
-from app.services.ai import OpenAIAdapter
 from app.services.auth import current_user
+from app.services.chat import ChatService
 
 
 def get_database(request: Request) -> Database:
@@ -24,14 +24,14 @@ def get_limiter(request: Request) -> RateLimiter:
     return request.app.state.limiter
 
 
-def get_ai(request: Request) -> OpenAIAdapter:
-    return request.app.state.ai
+def get_chat(request: Request) -> ChatService:
+    return request.app.state.chat
 
 
 DatabaseDep = Annotated[Database, Depends(get_database)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 RateLimiterDep = Annotated[RateLimiter, Depends(get_limiter)]
-AIDep = Annotated[OpenAIAdapter, Depends(get_ai)]
+ChatServiceDep = Annotated[ChatService, Depends(get_chat)]
 
 
 async def authenticated_user(request: Request, db: DatabaseDep) -> User:

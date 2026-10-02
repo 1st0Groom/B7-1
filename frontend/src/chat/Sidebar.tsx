@@ -1,8 +1,11 @@
 import { Brand } from "../components/Brand";
-import type { ChatState } from "./state";
+import type { Conversation } from "../api/types";
 
 interface Props {
-  state: ChatState;
+  conversations: Conversation[];
+  currentId: number | null;
+  busy: boolean;
+  hasMore: boolean;
   username: string;
   open: boolean;
   onCreate: () => void;
@@ -11,7 +14,10 @@ interface Props {
   onLogout: () => void;
 }
 export function Sidebar({
-  state,
+  conversations,
+  currentId,
+  busy,
+  hasMore,
   username,
   open,
   onCreate,
@@ -22,36 +28,24 @@ export function Sidebar({
   return (
     <aside id="sidebar" className={`sidebar${open ? " open" : ""}`}>
       <Brand />
-      <button
-        id="new-chat"
-        className="new-chat"
-        disabled={state.busy}
-        onClick={onCreate}
-      >
+      <button className="new-chat" disabled={busy} onClick={onCreate}>
         ＋ 새 대화
       </button>
       <p className="eyebrow">나의 대화</p>
-      <nav id="conversations" aria-label="이전 대화">
-        {state.conversations.map((conversation) => (
+      <nav aria-label="이전 대화">
+        {conversations.map((conversation) => (
           <button
             key={conversation.id}
-            className={`conversation${conversation.id === state.current ? " active" : ""}`}
+            className={`conversation${conversation.id === currentId ? " active" : ""}`}
             title={conversation.title}
-            aria-current={
-              conversation.id === state.current ? "true" : undefined
-            }
+            aria-current={conversation.id === currentId ? "true" : undefined}
             onClick={() => onSelect(conversation.id)}
           >
             {conversation.title}
           </button>
         ))}
       </nav>
-      <button
-        id="more-conversations"
-        className="subtle"
-        hidden={!state.hasMore}
-        onClick={onMore}
-      >
+      <button className="subtle" hidden={!hasMore} onClick={onMore}>
         대화 더 보기
       </button>
       <div className="account">
@@ -59,7 +53,7 @@ export function Sidebar({
           나
         </span>
         <span className="username">{username}</span>
-        <button id="logout" className="subtle" onClick={onLogout}>
+        <button className="subtle" onClick={onLogout}>
           로그아웃
         </button>
       </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { authAPI, explain } from "../api/client";
+import { authAPI } from "../api/client";
+import { explain } from "../api/errors";
 import { Brand } from "../components/Brand";
 
 export function AuthPage({ signup = false }: { signup?: boolean }) {
@@ -60,7 +61,7 @@ export function AuthPage({ signup = false }: { signup?: boolean }) {
         </small>
       </section>
       <section className="auth-panel">
-        <form id="auth-form" onSubmit={submit}>
+        <form onSubmit={submit}>
           <p className="eyebrow">
             {signup ? "처음 오셨나요?" : "다시 만나 반가워요"}
           </p>
@@ -102,12 +103,7 @@ export function AuthPage({ signup = false }: { signup?: boolean }) {
           <small id="password-hint">
             10~128자. 영문·숫자·특수문자 조합 조건은 없습니다.
           </small>
-          <p
-            id="auth-status"
-            className="status"
-            role="status"
-            aria-live="polite"
-          >
+          <p className="status" role="status" aria-live="polite">
             {status}
           </p>
           <button className="primary" type="submit" disabled={busy}>

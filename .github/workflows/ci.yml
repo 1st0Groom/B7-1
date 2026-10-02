@@ -14,7 +14,7 @@ jobs:
           node-version: "24"
       - run: npm install --global pnpm@12.3.4
       - run: pnpm --dir frontend install --frozen-lockfile
-      - run: pnpm --dir frontend check
+      - run: pnpm --dir frontend format:check
       - run: pnpm --dir frontend test
       - run: pnpm --dir frontend build
       - uses: astral-sh/setup-uv@v6

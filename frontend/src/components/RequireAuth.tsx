@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, Outlet, useOutletContext } from "react-router-dom";
-import { APIError, authAPI, explain } from "../api/client";
+import { authAPI } from "../api/client";
+import { APIError, explain } from "../api/errors";
 import type { User } from "../api/types";
 
 export function RequireAuth() {

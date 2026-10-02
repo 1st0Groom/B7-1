@@ -24,7 +24,7 @@ export function Composer({
   const disabled = blocked || !question.trim();
   return (
     <div className="composer-area">
-      <p id="chat-status" className="status" role="status" aria-live="polite">
+      <p className="status" role="status" aria-live="polite">
         {status}
       </p>
       <button
@@ -37,7 +37,6 @@ export function Composer({
         처리 결과 다시 확인
       </button>
       <form
-        id="chat-form"
         className="composer"
         onSubmit={(event) => {
           event.preventDefault();
@@ -68,13 +67,8 @@ export function Composer({
           }}
         />
         <div className="composer-footer">
-          <span id="char-count">{Array.from(question).length} / 2,000</span>
-          <button
-            id="send"
-            className="primary"
-            type="submit"
-            disabled={disabled}
-          >
+          <span>{Array.from(question).length} / 2,000</span>
+          <button className="primary" type="submit" disabled={disabled}>
             질문 보내기 ↑
           </button>
         </div>

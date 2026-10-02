@@ -1,10 +1,8 @@
-import type { Conversation, SendRequest, Turn, TurnPage } from "../api/types";
+import type { SendRequest, Turn, TurnPage } from "../api/types";
 
 export interface ChatState {
   current: number | null;
   revision: number;
-  conversations: Conversation[];
-  hasMore: boolean;
   turns: Turn[];
   beforeId: number | null;
   busy: boolean;
@@ -16,8 +14,6 @@ export function initialState(): ChatState {
   return {
     current: null,
     revision: 0,
-    conversations: [],
-    hasMore: false,
     turns: [],
     beforeId: null,
     busy: false,
@@ -77,6 +73,7 @@ export function chatReducer(state: ChatState, action: Action): ChatState {
         ...state,
         uncertain,
         turns: mergeTurns(state.turns, [action.turn]),
+        showRefresh: false,
       };
     }
     case "history": {

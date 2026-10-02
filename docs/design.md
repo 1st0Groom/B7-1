@@ -67,8 +67,12 @@ flowchart LR
 - **인증 서비스**: 사용자 생성, 비밀번호 검증, 세션 발급·조회·폐기.
 - **대화 서비스**: 대화 소유권 확인, 요청 중복 확인, 문맥 조립, AI 호출, 결과 저장.
 - **AI 어댑터**: OpenAI API 호출, 전체 호출 시간 제한, 결과 정규화, 오류 분류.
-- **DB 계층**: SQLAlchemy 모델과 요청별 세션. 초기에는 별도 Repository 계층을 만들지 않는다.
+- **DB 계층**: SQLAlchemy 모델과 요청별 세션. 채팅 저장은 `SQLAlchemyChatStore`가 담당하며 `ChatStore` 계약으로 처리 순서와 분리한다. 인증과 단순 대화 조회는 기존 서비스를 사용한다.
 - **공통 계층**: 설정, 요청 식별자, 로그, 예외 처리.
+
+`main.py`에서 `ChatService`에 저장소·AI·설정·요청 제한 함수를 주입한다. 채팅 서비스는 SQLAlchemy나 OpenAI SDK를 import하지 않으며, `TurnRecord`로 저장 결과를 받는다. AI 생성만 사용하는 서비스에는 `close`를 요구하지 않고, 시작·종료를 담당하는 앱은 `AIProvider` 계약을 사용한다. 저장소의 중복 키·소유권·terminal 상태 보존 계약은 메모리 대역과 SQL 구현에 같은 테스트를 적용한다.
+
+프런트의 `ChatPage`는 실제 API와 로그인 이동 콜백을 `useChat`에 전달한다. 목록 조회와 polling은 각각의 훅이 수명을 소유하고, UI 컴포넌트에는 필요한 값과 콜백만 전달한다. SOLID 원칙별 구현 위치는 README의 적용 경계 표에 기록한다.
 
 운영 앱은 **인스턴스 1개·Uvicorn worker 1개**로 시작한다. 사용자 요청은 비동기로 처리하되 SQLite 쓰기 트랜잭션은 짧게 유지한다. 여러 서버로 확장해야 할 때 PostgreSQL 전환을 검토한다.
 
@@ -98,6 +102,7 @@ flowchart LR
 - 전송 중: 현재 대화의 전송 버튼을 비활성화하고 “답변을 생성하고 있어요”를 표시한다.
 - 성공: 저장된 질문·응답과 시각을 표시한다. AI 출력은 `textContent`로 렌더링한다.
 - 실패: 해당 질문에 오류 안내와 재시도 버튼을 표시한다. 실패 안내를 AI 답변으로 취급하지 않는다.
+- 새 대화는 생성 응답으로 목록과 선택 상태를 갱신하고 빈 기록을 조회하지 않는다. 질문 성공 시 반환된 문답을 바로 표시하며, 서버가 정한 제목·정렬을 반영하기 위해 목록을 별도로 갱신한다. 목록 조회가 끝나기 전에도 다음 질문을 전송할 수 있으며, 이전 조회의 늦은 오류는 현재 상태를 덮어쓰지 않는다. 실패 시에는 저장된 실패 기록이나 불명확한 결과를 확인하기 위해 기록을 조회한다. 후속 조회 실패가 최초 전송 오류를 덮어쓰지 않도록 한다.
 - 통신 끊김: 처리 결과가 불명확하다고 안내하고 기록을 재조회한다. 확인 전에는 새 요청으로 자동 재전송하지 않는다. 기록이 없으면 사용자가 결과 확인 버튼을 눌러 같은 UUID로 확인한다. `pending`은 2초마다 최대 120초 조회한 뒤 수동 확인으로 전환한다.
 - 인증 만료: API의 `401`을 받으면 로그인으로 이동한다.
 - HTML `/chat` 비인증 요청은 로그인으로 리다이렉트하고, API 비인증 요청은 JSON `401`로 응답한다.
@@ -239,7 +244,7 @@ API 접두사는 `/api`로 한다. 인증은 세션 쿠키를 사용하며 인�
 | POST | `/api/conversations/{id}/messages` | 필요 | `{question, client_request_id}` / `200` 저장된 문답 |
 | GET | `/api/me/chats?limit=20&before_id=100` | 필요 | `200 {items, next_before_id}`, 내 전체 문답을 ID 내림차순 조회 |
 | GET | `/health/live` | 불필요 | `200 {status: "ok"}` |
-| GET | `/health/ready` | 불필요 | DB 조회·필수 설정 검사 성공 `200`, 실패 `503` |
+| GET | `/health/ready` | 불필요 | DB 조회 성공 `200`, 실패 `503`; 필수 설정은 시작 시 검증 |
 
 페이지 크기는 1~100, offset은 0 이상으로 제한한다. `before_id`는 선택 사항이며 해당 ID 미만만 선택한다. 다음 페이지가 없으면 `next_before_id`는 NULL이다. 문답 목록에는 성공·실패·대기 상태를 모두 포함한다.
 
@@ -333,7 +338,11 @@ app/
   database.py              # 엔진, 세션, SQLite 설정
   models.py                # users / sessions / conversations / chat_turns
   schemas.py               # 입력·출력·오류 스키마
-  dependencies.py          # 인증 사용자·DB·설정·AI 의존성 주입
+  dependencies.py          # 인증 사용자·DB·채팅 서비스 의존성 주입
+  ports.py                 # AI 생성·저장·복구 계약, 불변 TurnRecord
+  repositories/
+    chat.py                # SQL, 트랜잭션, 경쟁 조건, pending 복구
+    conversations.py       # 대화 소유권·생성·페이지 조회
   routers/
     __init__.py            # /api 및 페이지·health 라우터 등록
     pages.py               # React 진입 HTML, 직접 접속 세션 확인
@@ -343,9 +352,8 @@ app/
     health.py
   services/
     auth.py                # 비밀번호, 세션 수명
-    conversations.py       # 대화 소유권·생성·페이지 조회
-    chat.py                # 상태 전이, 문맥, 중복 방지
-    ai.py                  # OpenAI API 연동, 타임아웃
+    chat.py                # 인터페이스에 의존하는 생성·저장 처리 순서
+    ai.py                  # OpenAI API 연동, SDK 통신 오류 변환
   middleware.py            # 요청 ID, 출처 검사, 운영 로그
   errors.py                # 공통 오류 변환
 frontend/
@@ -359,7 +367,11 @@ frontend/
     components/            # 브랜드, 인증 보호
     pages/                 # AuthPage / ChatPage
     chat/
-      useChat.ts           # 비동기 흐름, pending polling 수명
+      useChat.ts           # API·인증 만료 콜백을 주입받아 사용자 흐름 조립
+      useConversationList.ts # 목록 조회와 오래된 응답 무시
+      usePendingPolling.ts # pending 자동 조회의 시작·종료·정리
+      requests.ts          # 성공·불명확·확정 오류 분류
+      ports.ts             # 목록·문답 조회·전송 계약
       state.ts             # 순수 상태 전이, 응답 병합, 경합 방어
       Sidebar.tsx          # 대화 목록, 계정
       TurnList.tsx         # 문답 및 오류 렌더링

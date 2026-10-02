@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.dependencies import DatabaseDep, SettingsDep
+from app.dependencies import DatabaseDep
 
 router = APIRouter(prefix="/health")
 
@@ -14,13 +14,11 @@ async def live():
 
 
 @router.get("/ready")
-async def ready(db: DatabaseDep, settings: SettingsDep):
+async def ready(db: DatabaseDep):
     try:
         async with db.sessions() as session:
             await session.execute(text("SELECT id FROM users LIMIT 1"))
             await session.execute(text("SELECT id FROM chat_turns LIMIT 1"))
-        if not settings.openai_api_key.get_secret_value() or not settings.ai_model:
-            raise ValueError("Missing AI settings")
-    except (SQLAlchemyError, ValueError):
+    except SQLAlchemyError:
         return JSONResponse({"status": "unavailable"}, status_code=503)
     return {"status": "ok"}

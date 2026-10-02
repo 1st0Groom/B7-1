@@ -13,8 +13,7 @@ from sqlalchemy.exc import OperationalError
 from app.errors import AppError
 from app.logging import logger
 from app.models import ChatTurn, Session, User, utcnow
-from app.services import chat
-from app.services.chat import recover_pending
+from app.repositories import chat
 from tests.conftest import conversation, register
 
 
@@ -90,6 +89,23 @@ async def test_chat_context_replay_and_ownership(context):
     first = response.json()
     assert first["question"] == "첫 질문"
     assert first["created_at"].endswith("Z")
+    assert first["completed_at"].endswith("Z")
+    assert set(first) == {
+        "id",
+        "conversation_id",
+        "client_request_id",
+        "question",
+        "answer",
+        "status",
+        "error_code",
+        "created_at",
+        "completed_at",
+    }
+    for path in (f"/api/conversations/{cid}/turns", "/api/me/chats"):
+        assert (await client.get(path)).json()["items"] == [first]
+    listed = (await client.get("/api/conversations")).json()["items"][0]
+    assert set(listed) == {"id", "title", "created_at", "updated_at"}
+    assert listed["created_at"].endswith("Z") and listed["updated_at"].endswith("Z")
     assert first["status"] == "succeeded"
     replay = await client.post(f"/api/conversations/{cid}/messages", json=payload)
     assert replay.json() == first
@@ -157,8 +173,11 @@ async def test_timeout_concurrency_and_recovery_race(context):
     )
     assert same.status_code == different.status_code == 409
     assert same.json()["error"]["code"] == "CHAT_IN_PROGRESS"
+    pending = (await client.get(f"/api/conversations/{cid}/turns")).json()["items"][0]
+    assert pending["status"] == "pending" and pending["completed_at"] is None
+    assert pending["created_at"].endswith("Z")
     # Recovery wins while a late provider result is still in flight.
-    await recover_pending(app.state.db, all_pending=True)
+    await app.state.recovery.recover_pending(all_pending=True)
     fake.release.set()
     result = await running
     assert result.status_code == 409

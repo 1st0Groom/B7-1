@@ -11,6 +11,7 @@ from starlette.concurrency import run_in_threadpool
 from app.database import commit
 from app.errors import AppError
 from app.models import Session, User, utcnow
+from app.schemas import Credentials
 
 hasher = PasswordHasher()
 DUMMY_HASH = hasher.hash("dummy-account-password")
@@ -20,10 +21,10 @@ def token_hash(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-async def signup(db, credentials):
+async def signup(db, credentials: Credentials):
     password_hash = await run_in_threadpool(hasher.hash, credentials.password)
     async with db.sessions() as session:
-        user = User(username=str(credentials.username).lower(), password_hash=password_hash)
+        user = User(username=credentials.username, password_hash=password_hash)
         session.add(user)
         try:
             await commit(session, phase="signup")
@@ -32,11 +33,9 @@ async def signup(db, credentials):
         return {"id": user.id, "username": user.username}
 
 
-async def login(db, settings, credentials, old_token):
+async def login(db, settings, credentials: Credentials, old_token):
     async with db.sessions() as session:
-        user = await session.scalar(
-            select(User).where(User.username == str(credentials.username).lower())
-        )
+        user = await session.scalar(select(User).where(User.username == credentials.username))
     encoded = user.password_hash if user else DUMMY_HASH
     try:
         await run_in_threadpool(hasher.verify, encoded, credentials.password)

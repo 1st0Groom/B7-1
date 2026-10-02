@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { authAPI } from "../api/client";
+import { authAPI, conversationsAPI } from "../api/client";
 import { Composer } from "../chat/Composer";
 import { Sidebar } from "../chat/Sidebar";
 import { TurnList } from "../chat/TurnList";
@@ -9,9 +9,12 @@ import { useChat } from "../chat/useChat";
 import { useUser } from "../components/RequireAuth";
 
 export function ChatPage() {
-  const chat = useChat();
   const user = useUser();
   const navigate = useNavigate();
+  const onUnauthorized = useCallback(() => {
+    void navigate("/login", { replace: true });
+  }, [navigate]);
+  const chat = useChat(conversationsAPI, onUnauthorized);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const scroll = useRef<HTMLElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -37,7 +40,10 @@ export function ChatPage() {
   return (
     <div className="chat-layout">
       <Sidebar
-        state={chat.state}
+        conversations={chat.conversations}
+        currentId={chat.state.current}
+        busy={chat.state.busy}
+        hasMore={chat.hasMore}
         username={user.username}
         open={sidebarOpen}
         onCreate={() => {
@@ -55,7 +61,6 @@ export function ChatPage() {
       <main className="chat-main">
         <header className="chat-header">
           <button
-            id="toggle-sidebar"
             className="subtle mobile-toggle"
             aria-controls="sidebar"
             aria-expanded={sidebarOpen}
@@ -64,20 +69,13 @@ export function ChatPage() {
             ☰ 대화
           </button>
           <span id="chat-title">
-            {chat.state.conversations.find(
-              (item) => item.id === chat.state.current,
-            )?.title ?? "새로운 배움"}
+            {chat.conversations.find((item) => item.id === chat.state.current)
+              ?.title ?? "새로운 배움"}
           </span>
           <span className="service-badge">학습 도우미</span>
         </header>
-        <section
-          id="message-scroll"
-          ref={scroll}
-          className="message-scroll"
-          aria-label="대화 내용"
-        >
+        <section ref={scroll} className="message-scroll" aria-label="대화 내용">
           <button
-            id="older-turns"
             className="subtle"
             hidden={!chat.state.beforeId}
             onClick={chat.older}

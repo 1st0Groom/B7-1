@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Query
 
 from app.dependencies import AuthUser, DatabaseDep
-from app.schemas import TurnList, UserOutput, turn_json
-from app.services import conversations
+from app.repositories import conversations
+from app.schemas import TurnList, UserOutput
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -19,5 +19,4 @@ async def my_chats(
     limit: int = Query(20, ge=1, le=100),
     before_id: int | None = Query(None, ge=1),
 ):
-    page = await conversations.user_history(db, user.id, limit, before_id)
-    return {"items": [turn_json(t) for t in page.items], "next_before_id": page.next_before_id}
+    return await conversations.user_history(db, user.id, limit, before_id)
