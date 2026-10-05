@@ -17,7 +17,6 @@ async def signup(db, credentials: Credentials):
             await commit(session, phase="signup")
         except IntegrityError:
             raise AppError("USERNAME_ALREADY_EXISTS") from None
-        return user
 
 
 async def login(db, credentials: Credentials):
@@ -28,7 +27,7 @@ async def login(db, credentials: Credentials):
         token = secrets.token_urlsafe(32)
         session.add(Session(token=token, user_id=user.id))
         await commit(session, phase="login", user_id=user.id)
-        return user, token
+        return token
 
 
 async def current_user(db, token):

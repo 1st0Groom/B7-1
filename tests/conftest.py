@@ -21,10 +21,9 @@ class FakeAI:
 
 async def register(client, username="user_123", password="long-password-123"):
     payload = {"username": username, "password": password}
-    assert (await client.post("/api/auth/signup", json=payload)).status_code == 201
+    assert (await client.post("/api/auth/signup", json=payload)).status_code == 204
     response = await client.post("/api/auth/login", json=payload)
-    assert response.status_code == 200, response.text
-    return response.json()
+    assert response.status_code == 204, response.text
 
 
 @pytest.fixture
@@ -42,3 +41,4 @@ async def context(tmp_path):
             transport=httpx.ASGITransport(app=app), base_url="http://localhost:8000"
         ) as client:
             yield app, client, fake
+    await app.state.db.engine.dispose()

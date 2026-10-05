@@ -23,7 +23,6 @@ def create_app(settings: Settings | None = None, ai=None):
     async def lifespan(app):
         await db.create_tables()
         yield
-        await db.engine.dispose()
 
     app = FastAPI(title="B7-1 AI Chat", lifespan=lifespan)
     app.state.db = db
@@ -49,11 +48,8 @@ def create_app(settings: Settings | None = None, ai=None):
 
     @app.exception_handler(SQLAlchemyError)
     async def database_error(request: Request, exc: SQLAlchemyError):
-        event("db_error")
         return error_response(AppError("DB_UNAVAILABLE"))
 
     app.include_router(router)
-    app.mount(
-        "/assets", StaticFiles(directory=FRONTEND_DIST / "assets", check_dir=False), name="assets"
-    )
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
     return app

@@ -55,7 +55,7 @@ docker compose logs --tail=100 app
 
 `app` 컨테이너가 80 포트로 FastAPI를 제공하고 SQLite를 `app_data` 볼륨의 `/data/app.db`에 저장합니다. 서비스 URL은 `http://<인스턴스 공인 IP 또는 도메인>`입니다.
 
-업데이트할 때도 `docker compose up --build -d`를 다시 실행합니다. `docker compose down -v`는 DB 볼륨까지 삭제하므로 사용하지 않습니다. 배포 후 외부 네트워크에서 가입·로그인·실제 AI 질문·재시작 후 기록 조회를 확인합니다.
+업데이트할 때도 `docker compose up --build -d`를 다시 실행합니다. `docker compose down -v`는 DB 볼륨까지 삭제하므로 평소에는 사용하지 않습니다. 마이그레이션 도구가 없으므로 DB 스키마(`app/models.py`)를 바꾸면 DB를 초기화해야 하며 저장된 계정·대화가 모두 삭제됩니다. 로컬은 `data/app.db`를 지우고, 서버는 `docker compose down -v && docker compose up --build -d`를 실행합니다. 배포 후 외부 네트워크에서 가입·로그인·실제 AI 질문·재시작 후 기록 조회를 확인합니다.
 
 ## API
 

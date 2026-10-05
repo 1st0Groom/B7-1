@@ -39,10 +39,10 @@ export function ChatPage({ chats, onAsked, onLogout }: Props) {
         <h1>B7-1 AI 챗봇</h1>
         <button onClick={() => void logout()}>로그아웃</button>
       </header>
-      <ol className="chats">
+      <ol>
         {chats.map((chat) => (
           <li key={chat.id}>
-            <p className="question">{chat.question}</p>
+            <p>{chat.question}</p>
             <p className="answer">{chat.answer}</p>
             <time dateTime={chat.created_at}>
               {new Date(chat.created_at).toLocaleString()}

@@ -17,8 +17,7 @@ def ask(client, question="라우터란?"):
 
 async def test_signup_login_logout(context):
     _, client, _ = context
-    user = await register(client)
-    assert user["username"] == "user_123"
+    await register(client)
     assert (await client.get("/api/me/chats")).status_code == 200
     assert (await client.post("/api/auth/logout")).status_code == 204
     assert (await client.get("/api/me/chats")).status_code == 401

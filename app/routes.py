@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import FileResponse
 
 from app.models import User
-from app.schemas import ChatOutput, Credentials, QuestionInput, UserOutput
+from app.schemas import ChatOutput, Credentials, QuestionInput
 from app.services import auth, chat
 
 FRONTEND_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
@@ -24,16 +24,15 @@ async def frontend():
     return FileResponse(FRONTEND_DIST / "index.html")
 
 
-@router.post("/api/auth/signup", status_code=201, response_model=UserOutput)
+@router.post("/api/auth/signup", status_code=204)
 async def signup(data: Credentials, request: Request):
-    return await auth.signup(request.app.state.db, data)
+    await auth.signup(request.app.state.db, data)
 
 
-@router.post("/api/auth/login", response_model=UserOutput)
+@router.post("/api/auth/login", status_code=204)
 async def login(data: Credentials, request: Request, response: Response):
-    user, token = await auth.login(request.app.state.db, data)
+    token = await auth.login(request.app.state.db, data)
     response.set_cookie("session", token)
-    return user
 
 
 @router.post("/api/auth/logout", status_code=204)

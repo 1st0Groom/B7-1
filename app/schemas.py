@@ -16,11 +16,6 @@ class QuestionInput(BaseModel):
     question: Question
 
 
-class UserOutput(BaseModel):
-    id: int
-    username: str
-
-
 class ChatOutput(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

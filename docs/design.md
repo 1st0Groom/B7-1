@@ -111,8 +111,8 @@ sequenceDiagram
 
 | 메서드 | 경로 | 인증 | 요청 / 성공 응답 |
 | --- | --- | --- | --- |
-| POST | `/api/auth/signup` | 불필요 | `{username, password}` / `201 {id, username}` |
-| POST | `/api/auth/login` | 불필요 | `{username, password}` / `200 {id, username}` + `session` 쿠키 |
+| POST | `/api/auth/signup` | 불필요 | `{username, password}` / `204` |
+| POST | `/api/auth/login` | 불필요 | `{username, password}` / `204` + `session` 쿠키 |
 | POST | `/api/auth/logout` | 불필요 | 본문 없음 / `204` |
 | POST | `/api/chat` | 필요 | `{question}` / `200 {id, question, answer, created_at}` |
 | GET | `/api/me/chats` | 필요 | `200 [{id, question, answer, created_at}, ...]`, 오래된 순 |
@@ -173,7 +173,7 @@ Cookie: session=<로그인 시 발급된 토큰>
 {"event": "db_save_success", "request_id": "abc123", "phase": "chat", "user_id": 12, "chat_id": 987}
 ```
 
-실패 시에는 `ai_call_failed`(오류 코드), `ai_provider_error`(OpenAI 오류 분류), `db_save_failed`, `db_error`, `request_failed`를 남긴다. 질문·답변·비밀번호·API 키는 로그에 남기지 않는다.
+실패 시에는 `ai_call_failed`(오류 코드), `ai_provider_error`(OpenAI 오류 분류), `db_save_failed`, `request_failed`를 남긴다. 질문·답변·비밀번호·API 키는 로그에 남기지 않는다.
 
 ## 8. 디렉터리 구조
 
@@ -198,5 +198,4 @@ Dockerfile, compose.yaml
 
 - `main`은 배포 가능한 상태로 유지하고 기능 브랜치(`feature/auth`, `feature/chat`, `feature/ui`, `chore/deploy` 등)에서 작업한다.
 - 기능 브랜치 → PR → 다른 팀원 검토 → merge commit으로 통합해 개인 커밋이 이력에 남게 한다.
-- CI는 프런트 검사·빌드, 백엔드 lint·테스트를 실행한다.
 - 팀원별 역할과 개인 작업 요약, 대표 커밋·PR 링크는 [팀 문서](team.md)에 기록한다.
