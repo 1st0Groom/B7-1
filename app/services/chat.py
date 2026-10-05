@@ -38,6 +38,5 @@ async def ask(db, ai, user_id, question):
     async with db.sessions() as session:
         chat = Chat(user_id=user_id, question=question, answer=answer)
         session.add(chat)
-        await session.flush()
-        await commit(session, phase="chat", user_id=user_id, chat_id=chat.id)
+        await commit(session, phase="chat", user_id=user_id)
         return chat

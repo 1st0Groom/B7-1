@@ -93,8 +93,7 @@ sqlite3 data/app.db '.parameter init' '.parameter set :user_id 1' '.read scripts
 ```bash
 pnpm --dir frontend check
 pnpm --dir frontend build
-uv run --frozen ruff check app tests
-uv run --frozen pytest -q
+uv run --frozen ruff check app
 ```
 
-테스트는 임시 SQLite와 가짜 AI를 사용하므로 OpenAI 비용이 발생하지 않습니다. 인증·접근 제어, 문맥 유지, 사용자별 로그, AI 실패·시간 초과, DB 저장 실패, 입력 검증, 운영 로그 이벤트를 검증합니다. 실제 OpenAI 호출과 외부 접속은 배포 후 별도로 확인합니다.
+자동 테스트는 두지 않습니다. B7-1 요구사항별 확인 절차는 [점검 시나리오](docs/check-scenario.md)에 있으며, AI 에이전트나 사람이 그대로 따라 실행할 수 있습니다.

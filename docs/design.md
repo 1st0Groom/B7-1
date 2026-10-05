@@ -170,7 +170,7 @@ Cookie: session=<로그인 시 발급된 토큰>
 {"event": "request_received", "request_id": "abc123", "method": "POST", "path": "/api/chat"}
 {"event": "ai_call_start", "request_id": "abc123", "user_id": 12}
 {"event": "ai_call_success", "request_id": "abc123", "user_id": 12, "latency_ms": 1240}
-{"event": "db_save_success", "request_id": "abc123", "phase": "chat", "user_id": 12, "chat_id": 987}
+{"event": "db_save_success", "request_id": "abc123", "phase": "chat", "user_id": 12}
 ```
 
 실패 시에는 `ai_call_failed`(오류 코드), `ai_provider_error`(OpenAI 오류 분류), `db_save_failed`, `request_failed`를 남긴다. 질문·답변·비밀번호·API 키는 로그에 남기지 않는다.
@@ -190,7 +190,7 @@ app/
   services/        # auth / chat / ai
 frontend/src/      # App, AuthPage, ChatPage, api, styles
 scripts/check_logs.sql
-tests/             # pytest API 테스트
+docs/check-scenario.md  # 요구사항 점검 시나리오
 Dockerfile, compose.yaml
 ```
 
