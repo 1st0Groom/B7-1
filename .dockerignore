@@ -9,8 +9,6 @@
 data
 *.db
 *.db-*
-*.sqlite*
-*.log
 cookies*.txt
 **/node_modules
 **/dist

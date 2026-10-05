@@ -14,8 +14,8 @@ from app.routes import FRONTEND_DIST, router
 from app.services.ai import OpenAIAdapter
 
 
-def create_app(settings: Settings | None = None, ai=None):
-    settings = settings or Settings()
+def create_app():
+    settings = Settings()
     configure()
     db = Database(settings.database_url)
 
@@ -26,7 +26,7 @@ def create_app(settings: Settings | None = None, ai=None):
 
     app = FastAPI(title="B7-1 AI Chat", lifespan=lifespan)
     app.state.db = db
-    app.state.ai = ai or OpenAIAdapter(settings)
+    app.state.ai = OpenAIAdapter(settings)
 
     @app.middleware("http")
     async def log_requests(request: Request, call_next):

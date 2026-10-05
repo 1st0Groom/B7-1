@@ -9,9 +9,6 @@ __pycache__/
 data/
 *.db
 *.db-*
-*.sqlite*
-*.log
 cookies*.txt
 dist/
-*.egg-info/
 node_modules/

@@ -4,7 +4,7 @@ export interface Chat {
   answer: string;
   created_at: string;
 }
-export interface Credentials {
+interface Credentials {
   username: string;
   password: string;
 }
