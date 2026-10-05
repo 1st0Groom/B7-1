@@ -1,98 +1,43 @@
-"""Chat use case: admission, generation and persisted outcomes through small ports."""
+"""Question → AI call → answer → chat log, with recent exchanges as context."""
 
-import asyncio
 import time
-from collections.abc import Callable
 
+from sqlalchemy import select
+
+from app.database import commit
 from app.errors import AppError
 from app.logging import event
-from app.ports import ChatPolicy, ChatStore, ReplyGenerator, StorageError, TurnRecord
+from app.models import Chat
+
+CONTEXT_TURNS = 5
 
 
-def replay(turn: TurnRecord, question: str) -> TurnRecord:
-    if turn.question != question:
-        raise AppError("IDEMPOTENCY_CONFLICT", 409, turn.id)
-    if turn.status == "pending":
-        raise AppError("CHAT_IN_PROGRESS", 409, turn.id)
-    if turn.status == "failed":
-        raise AppError(turn.error_code, turn_id=turn.id)
-    return turn
+async def history(db, user_id):
+    async with db.sessions() as session:
+        rows = await session.scalars(select(Chat).where(Chat.user_id == user_id).order_by(Chat.id))
+        return list(rows)
 
 
-class ChatService:
-    def __init__(
-        self,
-        store: ChatStore,
-        ai: ReplyGenerator,
-        policy: ChatPolicy,
-        admit: Callable[[int], None],
-    ):
-        self.store = store
-        self.ai = ai
-        self.policy = policy
-        self.admit = admit
-
-    async def send(
-        self,
-        user_id: int,
-        conversation_id: int,
-        question: str,
-        request_id: str,
-    ) -> TurnRecord:
-        try:
-            return await self._send(user_id, conversation_id, question, request_id)
-        except StorageError:
-            raise AppError("DB_UNAVAILABLE") from None
-
-    async def _send(
-        self,
-        user_id: int,
-        conversation_id: int,
-        question: str,
-        request_id: str,
-    ) -> TurnRecord:
-        reservation = await self.store.reserve(
-            user_id, conversation_id, question, request_id, lambda: self.admit(user_id)
+async def ask(db, ai, user_id, question):
+    async with db.sessions() as session:
+        recent = await session.scalars(
+            select(Chat)
+            .where(Chat.user_id == user_id)
+            .order_by(Chat.id.desc())
+            .limit(CONTEXT_TURNS)
         )
-        turn = reservation.turn
-        if not reservation.created:
-            return replay(turn, question)
-        start = time.monotonic()
-        try:
-            history = await self.store.history(turn, self.policy.chat_context_turns)
-            event(
-                "ai_call_start", user_id=user_id, conversation_id=conversation_id, turn_id=turn.id
-            )
-            async with asyncio.timeout(self.policy.ai_timeout_seconds):
-                answer = await self.ai.generate(history, question)
-            event(
-                "ai_call_success",
-                turn_id=turn.id,
-                latency_ms=int((time.monotonic() - start) * 1000),
-            )
-        except asyncio.CancelledError:
-            try:
-                await asyncio.shield(self.store.finish(turn.id, error_code="REQUEST_INTERRUPTED"))
-            except StorageError:
-                event("db_save_failed", phase="interrupted", turn_id=turn.id)
-            raise
-        except Exception as exc:
-            if isinstance(exc, TimeoutError):
-                code = "AI_TIMEOUT"
-            elif isinstance(exc, AppError):
-                code = exc.code
-            elif isinstance(exc, StorageError):
-                code = "DB_UNAVAILABLE"
-            else:
-                code = "INTERNAL_ERROR"
-            event("ai_call_failed", turn_id=turn.id, code=code)
-            saved = await self.store.finish(turn.id, error_code=code)
-        else:
-            saved = await self.store.finish(
-                turn.id,
-                answer=answer,
-                model=self.policy.ai_model,
-                latency_ms=int((time.monotonic() - start) * 1000),
-            )
-        # Recovery can win while generation is in flight; the persisted outcome is authoritative.
-        return replay(saved, question)
+        context = [(chat.question, chat.answer) for chat in reversed(list(recent))]
+    event("ai_call_start", user_id=user_id)
+    start = time.monotonic()
+    try:
+        answer = await ai.generate(context, question)
+    except AppError as exc:
+        event("ai_call_failed", user_id=user_id, code=exc.code)
+        raise
+    event("ai_call_success", user_id=user_id, latency_ms=int((time.monotonic() - start) * 1000))
+    async with db.sessions() as session:
+        chat = Chat(user_id=user_id, question=question, answer=answer)
+        session.add(chat)
+        await session.flush()
+        await commit(session, phase="chat", user_id=user_id, chat_id=chat.id)
+        return chat

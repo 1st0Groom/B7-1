@@ -14,16 +14,12 @@ jobs:
           node-version: "24"
       - run: npm install --global pnpm@12.3.4
       - run: pnpm --dir frontend install --frozen-lockfile
-      - run: pnpm --dir frontend format:check
-      - run: pnpm --dir frontend test
+      - run: pnpm --dir frontend check
       - run: pnpm --dir frontend build
       - uses: astral-sh/setup-uv@v6
         with:
           version: "0.11.31"
-      - run: uv sync --frozen --python 3.12 --extra dev --extra browser
-      - run: uv run --frozen ruff check app tests migrations scripts
-      - run: uv run --frozen ruff format --check app tests migrations scripts
+      - run: uv sync --frozen --python 3.12 --extra dev
+      - run: uv run --frozen ruff check app tests
+      - run: uv run --frozen ruff format --check app tests
       - run: uv run --frozen pytest -q
-      - run: uv run --frozen playwright install --with-deps chromium
-      - run: uv run --frozen python -m tests.browser_smoke
-      - run: docker build -t b7-chat:ci .

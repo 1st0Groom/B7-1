@@ -1,26 +1,35 @@
-import { Link, Navigate, Route, Routes } from "react-router-dom";
-import { RequireAuth } from "./components/RequireAuth";
-import { AuthPage } from "./pages/AuthPage";
-import { ChatPage } from "./pages/ChatPage";
+import { useEffect, useState } from "react";
+import { APIError, api, type Chat } from "./api";
+import { AuthPage } from "./AuthPage";
+import { ChatPage } from "./ChatPage";
 
 export function App() {
+  const [chats, setChats] = useState<Chat[] | null>(null);
+  const [checked, setChecked] = useState(false);
+  const [error, setError] = useState("");
+
+  async function load() {
+    try {
+      setChats(await api.chats());
+    } catch (e) {
+      setChats(null);
+      if (!(e instanceof APIError && e.status === 401))
+        setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setChecked(true);
+    }
+  }
+  useEffect(() => {
+    void load();
+  }, []);
+
+  if (!checked) return null;
+  if (!chats) return <AuthPage error={error} onLogin={load} />;
   return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/chat" replace />} />
-      <Route path="/login" element={<AuthPage key="login" />} />
-      <Route path="/signup" element={<AuthPage key="signup" signup />} />
-      <Route element={<RequireAuth />}>
-        <Route path="/chat" element={<ChatPage />} />
-      </Route>
-      <Route
-        path="*"
-        element={
-          <main className="welcome">
-            <h1>페이지를 찾을 수 없습니다.</h1>
-            <Link to="/chat">대화로 돌아가기</Link>
-          </main>
-        }
-      />
-    </Routes>
+    <ChatPage
+      chats={chats}
+      onAsked={(chat) => setChats((list) => [...(list ?? []), chat])}
+      onLogout={() => setChats(null)}
+    />
   );
 }

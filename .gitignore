@@ -8,7 +8,6 @@ __pycache__/
 .ruff_cache/
 .idea/
 data/
-backups/
 *.db
 *.db-*
 *.sqlite*

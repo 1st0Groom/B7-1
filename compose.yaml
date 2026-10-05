@@ -1,75 +1,13 @@
 services:
-  migrate:
-    build: .
-    image: b7-chat:local
-    command: ["alembic", "upgrade", "head"]
-    environment:
-      DATABASE_URL: sqlite+aiosqlite:////data/app.db
-    volumes:
-      - app_data:/data
-    restart: "no"
   app:
     build: .
-    image: b7-chat:local
     env_file: .env
     environment:
-      APP_ENV: production
-      APP_ORIGIN: https://${APP_DOMAIN:?Set APP_DOMAIN in .env}
-      COOKIE_SECURE: "true"
       DATABASE_URL: sqlite+aiosqlite:////data/app.db
-    command: ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips=172.29.71.2", "--no-access-log"]
     volumes:
       - app_data:/data
-      - ./backups:/backups
-    expose:
-      - "8000"
-    networks:
-      default:
-        ipv4_address: 172.29.71.3
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    restart: unless-stopped
-    stop_grace_period: 45s
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-  caddy:
-    image: caddy:2-alpine
-    environment:
-      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN in .env}
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      default:
-        ipv4_address: 172.29.71.2
-    depends_on:
-      app:
-        condition: service_healthy
+      - "80:8000"
     restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
 volumes:
   app_data:
-  caddy_data:
-  caddy_config:
-networks:
-  default:
-    ipam:
-      config:
-        - subnet: 172.29.71.0/24

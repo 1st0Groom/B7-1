@@ -1,0 +1,60 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #f6f6f3;
+  color: #222;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+form {
+  display: grid;
+  gap: 8px;
+}
+
+input,
+textarea,
+button {
+  font: inherit;
+  padding: 8px 10px;
+}
+
+textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.chats {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.question {
+  font-weight: 600;
+}
+
+.answer {
+  white-space: pre-wrap;
+}
+
+time {
+  color: #777;
+  font-size: 12px;
+}
+
+[role="status"] {
+  min-height: 1.2em;
+  margin: 0;
+}

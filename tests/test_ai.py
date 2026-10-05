@@ -26,7 +26,7 @@ async def mocked_adapter(handler):
     try:
         yield adapter
     finally:
-        await adapter.close()
+        await adapter.client.close()
 
 
 async def test_real_sdk_serialization_and_no_retries():
@@ -57,10 +57,16 @@ async def test_real_sdk_serialization_and_no_retries():
         )
 
     async with mocked_adapter(handler) as adapter:
-        assert await adapter.generate([("이전", "답변")], "현재") == "테스트 답변"
-        assert calls[0]["store"] is False
-        assert calls[0]["max_output_tokens"] == 1000
-        assert [m["role"] for m in calls[0]["input"]] == ["system", "user", "assistant", "user"]
+        history = [("이전", "답변"), ("후속 질문", "후속 답변")]
+        assert await adapter.generate(history, "<|endoftext|>") == "테스트 답변"
+        assert calls[0]["model"] == "gpt-4o-mini"
+        assert [(m["role"], m["content"]) for m in calls[0]["input"][1:]] == [
+            ("user", "이전"),
+            ("assistant", "답변"),
+            ("user", "후속 질문"),
+            ("assistant", "후속 답변"),
+            ("user", "<|endoftext|>"),
+        ]
 
 
 @pytest.mark.parametrize("status", [401, 429, 500])
@@ -77,19 +83,6 @@ async def test_provider_errors_are_sanitized(status):
         assert exc.value.code == "AI_UNAVAILABLE"
         assert len(calls) == 1
         assert "secret" not in str(exc.value)
-
-
-async def test_context_bounds_and_literal_special_tokens():
-    adapter = OpenAIAdapter(settings(chat_context_max_chars=8))
-    try:
-        context = adapter.build_context([("old", "long answer"), ("new", "yes")], "<|endoftext|>")
-        assert [m["content"] for m in context[1:]] == ["new", "yes", "<|endoftext|>"]
-        adapter.settings.ai_context_window_tokens = 1100
-        with pytest.raises(AppError) as exc:
-            adapter.build_context([], "긴 질문" * 2000)
-        assert exc.value.code == "CONTEXT_TOO_LARGE"
-    finally:
-        await adapter.close()
 
 
 async def test_sdk_network_timeout_is_translated_without_retry():
