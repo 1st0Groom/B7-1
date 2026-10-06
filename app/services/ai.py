@@ -26,6 +26,7 @@ class OpenAIAdapter:
         try:
             result = await self.client.responses.create(model=self.model, input=messages)
         except APITimeoutError:
+            event("ai_provider_error", category="APITimeoutError", status_code=None)
             raise AppError("AI_TIMEOUT") from None
         except APIError as exc:
             event(
@@ -36,5 +37,6 @@ class OpenAIAdapter:
             raise AppError("AI_UNAVAILABLE") from None
         answer = result.output_text.strip()
         if not answer:
+            event("ai_provider_error", category="EmptyResponse", status_code=None)
             raise AppError("AI_UNAVAILABLE")
         return answer
