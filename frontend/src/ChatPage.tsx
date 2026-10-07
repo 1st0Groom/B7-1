@@ -71,6 +71,7 @@ export function ChatPage({ chats, onAsked, onLogout }: Props) {
               <button
                 key={example}
                 type="button"
+                disabled={busy}
                 onClick={() => setQuestion(example)}
               >
                 {example}
