@@ -1,5 +1,5 @@
 from openai import APIError, APITimeoutError, AsyncOpenAI
-
+from openai import APIError, APITimeoutError, AsyncOpenAI, RateLimitError
 from app.errors import AppError
 from app.logging import event
 from app.services.prompts import build_messages
@@ -21,6 +21,9 @@ class OpenAIAdapter:
         except APITimeoutError:
             event("ai_provider_error", category="APITimeoutError", status_code=None)
             raise AppError("AI_TIMEOUT") from None
+        except RateLimitError:
+            event("ai_provider_error", category="RateLimitError", status_code=429)
+            raise AppError("AI_RATE_LIMITED") from None
         except APIError as exc:
             event(
                 "ai_provider_error",
