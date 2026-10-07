@@ -103,6 +103,61 @@ form p[role="status"]:empty {
   box-shadow: 0 8px 28px rgb(31 41 55 / 4%);
 }
 
+.initial-status {
+  width: min(100% - 32px, 480px);
+  margin: 24px auto;
+  color: #667085;
+  font-size: 14px;
+}
+
+.loading-page {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.loading-card {
+  width: min(100%, 480px);
+  padding: clamp(24px, 5vw, 40px);
+  border: 1px solid #dce5f2;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgb(31 41 55 / 4%);
+  text-align: center;
+}
+
+.loading-spinner {
+  display: block;
+  width: 32px;
+  height: 32px;
+  margin: 0 auto 24px;
+  border: 3px solid #dce5f2;
+  border-top-color: #356ae6;
+  border-radius: 50%;
+  animation: loading-spin 850ms linear infinite;
+}
+
+.loading-card h1 {
+  margin: 0;
+  font-size: clamp(22px, 3vw, 26px);
+  line-height: 1.4;
+}
+
+.loading-card p {
+  margin: 12px 0 0;
+  color: #667085;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .auth-page h1,
 .chat-page h1 {
   margin: 0;
@@ -168,6 +223,26 @@ form p[role="status"]:empty {
   flex-shrink: 0;
 }
 
+.chat-page .learning-history {
+  margin-top: 28px;
+}
+
+.chat-page .learning-history h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+.chat-page .learning-history > p {
+  margin: 8px 0 0;
+  color: #667085;
+  line-height: 1.6;
+}
+
+.chat-page .learning-history ol {
+  margin-bottom: 0;
+}
+
 .chat-page ol {
   display: grid;
   gap: 16px;
@@ -199,7 +274,15 @@ form p[role="status"]:empty {
   line-height: 1.65;
 }
 
-.chat-page li p:first-child {
+.chat-page .message-label {
+  display: block;
+  margin-bottom: 6px;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.chat-page li > p:not(.answer) {
   margin-bottom: 16px;
   font-weight: 600;
 }
@@ -209,6 +292,30 @@ form p[role="status"]:empty {
   border-radius: 10px;
   background: #eef4ff;
   white-space: pre-wrap;
+}
+
+.chat-page .pending-answer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #667085;
+}
+
+.pending-spinner {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #c8d9f8;
+  border-top-color: #356ae6;
+  border-radius: 50%;
+  animation: loading-spin 850ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner,
+  .pending-spinner {
+    animation: none;
+  }
 }
 
 .chat-page time {
