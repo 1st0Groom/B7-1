@@ -158,11 +158,15 @@ Cookie: session=<로그인 시 발급된 토큰>
 | 아이디 중복 | `409 USERNAME_ALREADY_EXISTS` |
 | 입력 검증 실패(빈 질문·길이 초과, 빈 아이디·비밀번호) | `422 VALIDATION_ERROR` |
 | AI 시간 초과 | `504 AI_TIMEOUT` |
-| AI 인증·요청 제한·네트워크 오류·빈 응답 | `502 AI_UNAVAILABLE` |
+| AI 인증·네트워크 오류·빈 응답 | `502 AI_UNAVAILABLE` |
+| AI의 일시적인 요청 제한 | `503 AI_RATE_LIMITED` |
+| AI 크레딧 소진·지출 한도·사용량 한도 초과 | `503 AI_QUOTA_EXCEEDED` |
 | DB 오류 | `503 DB_UNAVAILABLE` |
 | 그 밖의 서버 오류 | `500 INTERNAL_ERROR` |
 
 앱에서 발생한 예외는 모두 위 형식의 JSON 응답으로 바뀌므로 AI나 DB가 실패해도 서버는 계속 동작한다. 없는 경로·잘못된 HTTP 메서드는 FastAPI 기본 응답(`404`/`405`, `{"detail": ...}`)을 그대로 쓴다. 화면은 오류 메시지를 입력창 아래에 표시하고 입력한 질문을 유지한다.
+
+OpenAI의 `429`는 `error.code`와 `error.type`으로 원인을 구분한다. 크레딧·지출·사용량 한도 오류는 관리자 확인을 안내하고, 일시적인 요청 제한은 잠시 후 재시도를 안내한다. 자동 재시도는 하지 않는다. 오류 구분은 [OpenAI 공식 오류 문서](https://developers.openai.com/api/docs/guides/error-codes)를 따른다.
 
 서버 로그는 요청마다 같은 `request_id`가 붙는 JSON 한 줄로 출력한다. 실제 로그에는 `time`(UTC) 필드도 있으며 아래 예시에서는 생략했다.
 

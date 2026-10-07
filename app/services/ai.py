@@ -1,5 +1,5 @@
-from openai import APIError, APITimeoutError, AsyncOpenAI
 from openai import APIError, APITimeoutError, AsyncOpenAI, RateLimitError
+
 from app.errors import AppError
 from app.logging import event
 from app.services.prompts import build_messages
@@ -21,8 +21,16 @@ class OpenAIAdapter:
         except APITimeoutError:
             event("ai_provider_error", category="APITimeoutError", status_code=None)
             raise AppError("AI_TIMEOUT") from None
-        except RateLimitError:
+        except RateLimitError as exc:
             event("ai_provider_error", category="RateLimitError", status_code=429)
+            if exc.type == "insufficient_quota" or exc.code in {
+                "insufficient_quota",
+                "credit_balance_exhausted",
+                "organization_spend_limit_exceeded",
+                "project_spend_limit_exceeded",
+                "organization_usage_limit_exceeded",
+            }:
+                raise AppError("AI_QUOTA_EXCEEDED") from None
             raise AppError("AI_RATE_LIMITED") from None
         except APIError as exc:
             event(
