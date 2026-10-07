@@ -49,6 +49,16 @@ uv run --frozen uvicorn app.main:create_app --factory --reload
 
 Linux 인스턴스 1대와 Docker Engine + Compose가 필요합니다. 외부에서 80 포트로 접속할 수 있게 엽니다.
 
+Amazon Linux 2023 x86_64에서 `docker compose up --build`가 Buildx 0.17 이상을 요구하면 다음 플러그인을 설치합니다.
+
+```bash
+mkdir -p ~/.docker/cli-plugins
+curl -fSL https://github.com/docker/buildx/releases/download/v0.37.2/buildx-v0.37.2.linux-amd64 \
+  -o ~/.docker/cli-plugins/docker-buildx
+chmod +x ~/.docker/cli-plugins/docker-buildx
+docker buildx version
+```
+
 ```bash
 cp .env.example .env   # OPENAI_API_KEY, AI_MODEL을 실제 값으로 설정합니다.
 docker compose up --build -d
