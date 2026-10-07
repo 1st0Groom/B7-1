@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  B7-1 chatbot host in the default VPC, kept to one EC2 instance for a small
+  term-project deployment.
+
+Metadata:
+  AWSToolsMetrics:
+    AWSAgentToolkit: aws-cloudformation@3
+  com.aws.cloudformation.Context:
+    arch: Single EC2 in the default VPC -> Docker Compose app
+    must:
+      - Keep public HTTP access on TCP 80 for external evaluation.
+      - Limit SSH ingress to the operator's public IPv4 /32.
+      - Back up SQLite before deleting the stack; the instance root disk is removed.
+    ref:
+      - at: README.md
+        has: Application ports, SQLite volume, and Docker Compose deployment steps.
+        scope: B7-1 runtime contract
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t3.micro
+      - t3.small
+    Description: t3.small is the default for building the frontend and backend images.
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Existing EC2 key pair used to connect to the instance over SSH.
+
+  SshCidr:
+    Type: String
+    AllowedPattern: '^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}/32$'
+    ConstraintDescription: Enter one public IPv4 address followed by /32.
+    Description: Restrict SSH to your current public IPv4 address, for example 203.0.113.10/32.
+
+  AmazonLinux2023Ami:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: Resolves the latest Amazon Linux 2023 x86_64 AMI in the selected region.
+
+Resources:
+  ChatbotSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public web access and SSH from the operator IP only.
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SshCidr
+      Tags:
+        - Key: Project
+          Value: B7-1
+
+  ChatbotInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmazonLinux2023Ami
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SecurityGroupIds:
+        - !GetAtt ChatbotSecurityGroup.GroupId
+      MetadataOptions:
+        HttpTokens: required
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-chatbot'
+        - Key: Project
+          Value: B7-1
+
+Outputs:
+  InstanceId:
+    Description: EC2 instance ID.
+    Value: !Ref ChatbotInstance
+
+  PublicIp:
+    Description: Public IPv4 address; it may change if the instance is stopped and started.
+    Value: !GetAtt ChatbotInstance.PublicIp
+
+  ServiceUrl:
+    Description: HTTP URL for the deployed chatbot after Docker Compose starts.
+    Value: !Sub 'http://${ChatbotInstance.PublicIp}'
