@@ -2,11 +2,7 @@ from openai import APIError, APITimeoutError, AsyncOpenAI
 
 from app.errors import AppError
 from app.logging import event
-
-SYSTEM_PROMPT = (
-    "You are a helpful learning assistant. Explain concepts clearly, use examples when useful, "
-    "and answer in the user's language. Be honest when uncertain."
-)
+from app.services.prompts import build_messages
 
 
 class OpenAIAdapter:
@@ -19,10 +15,7 @@ class OpenAIAdapter:
         )
 
     async def generate(self, history, question):
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-        for q, a in history:
-            messages.extend([{"role": "user", "content": q}, {"role": "assistant", "content": a}])
-        messages.append({"role": "user", "content": question})
+        messages = build_messages(history, question)
         try:
             result = await self.client.responses.create(model=self.model, input=messages)
         except APITimeoutError:
