@@ -31,4 +31,3 @@ class OpenAIAdapter:
         if not answer:
             raise AppError("AI_UNAVAILABLE")
         return answer
-    
