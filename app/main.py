@@ -11,7 +11,7 @@ from app.database import Database
 from app.errors import AppError, error_response
 from app.logging import configure, event, request_id
 from app.routes import FRONTEND_DIST, router
-from app.services.ai import OpenAIAdapter
+from app.services.ai import ChatCompletionsAdapter
 
 
 def create_app():
@@ -26,7 +26,7 @@ def create_app():
 
     app = FastAPI(title="B7-1 AI Chat", lifespan=lifespan)
     app.state.db = db
-    app.state.ai = OpenAIAdapter(settings)
+    app.state.ai = ChatCompletionsAdapter(settings)
 
     @app.middleware("http")
     async def log_requests(request: Request, call_next):

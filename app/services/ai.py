@@ -9,11 +9,12 @@ SYSTEM_PROMPT = (
 )
 
 
-class OpenAIAdapter:
+class ChatCompletionsAdapter:
     def __init__(self, settings):
         self.model = settings.ai_model
         self.client = AsyncOpenAI(
-            api_key=settings.openai_api_key,
+            api_key=settings.ai_api_key,
+            base_url=settings.ai_base_url,
             max_retries=0,
             timeout=settings.ai_timeout_seconds,
         )
@@ -24,7 +25,7 @@ class OpenAIAdapter:
             messages.extend([{"role": "user", "content": q}, {"role": "assistant", "content": a}])
         messages.append({"role": "user", "content": question})
         try:
-            result = await self.client.responses.create(model=self.model, input=messages)
+            result = await self.client.chat.completions.create(model=self.model, messages=messages)
         except APITimeoutError:
             raise AppError("AI_TIMEOUT") from None
         except APIError as exc:
@@ -34,7 +35,7 @@ class OpenAIAdapter:
                 status_code=getattr(exc, "status_code", None),
             )
             raise AppError("AI_UNAVAILABLE") from None
-        answer = result.output_text.strip()
+        answer = (result.choices[0].message.content or "").strip()
         if not answer:
             raise AppError("AI_UNAVAILABLE")
         return answer

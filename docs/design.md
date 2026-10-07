@@ -26,7 +26,7 @@ flowchart LR
     A --> D[(SQLite)]
     C --> D
     C --> G[AI 어댑터]
-    G -->|서버 API 키| E[OpenAI API]
+    G -->|서버 API 키| E[네이토 Chat Completions API]
     W --> L[JSON 서버 로그]
 ```
 
@@ -36,7 +36,7 @@ flowchart LR
 | 라우트 | `app/routes.py` | API 경로, 입력 검증, 로그인 확인 의존성, 세션 쿠키 |
 | 인증 서비스 | `app/services/auth.py` | 가입, 비밀번호 검증, 세션 발급·조회·삭제 |
 | 채팅 서비스 | `app/services/chat.py` | 최근 문맥 조회 → AI 호출 → 문답 저장, 내 로그 조회 |
-| AI 어댑터 | `app/services/ai.py` | OpenAI 호출, 시간 제한, 오류 분류 |
+| AI 어댑터 | `app/services/ai.py` | 네이토 Chat Completions 호출, 시간 제한, 오류 분류 |
 | DB | `app/models.py`, `app/database.py` | 테이블 정의, 세션, 저장 성공·실패 로그 |
 | 화면 | `frontend/src/` | 로그인·회원가입 화면, 채팅 화면 |
 
@@ -90,7 +90,7 @@ sequenceDiagram
     participant B as 브라우저
     participant F as FastAPI
     participant D as SQLite
-    participant A as OpenAI API
+    participant A as 네이토 Chat Completions API
     B->>F: POST /api/chat
     F->>D: 세션 확인, 최근 문답 5개 조회
     F->>A: 시스템 지침 + 최근 문답 + 현재 질문
@@ -105,7 +105,7 @@ sequenceDiagram
 
 - **문맥 전략**: 같은 사용자의 최근 문답 최대 5쌍을 오래된 순서로 보내고 현재 질문을 붙인다.
 - **입력 검증**: 질문은 앞뒤 공백을 제거한 뒤 1~2,000자여야 한다. 위반 시 `422`이며 AI를 호출하지 않는다.
-- **시간 제한**: OpenAI 호출은 `AI_TIMEOUT_SECONDS`(기본 30초) 제한, 자동 재시도 0회.
+- **시간 제한**: AI API 호출은 `AI_TIMEOUT_SECONDS`(기본 30초) 제한, 자동 재시도 0회.
 
 ## 6. API 명세
 
@@ -173,7 +173,7 @@ Cookie: session=<로그인 시 발급된 토큰>
 {"event": "db_save_success", "request_id": "abc123", "phase": "chat", "user_id": 12}
 ```
 
-실패 시에는 `ai_call_failed`(오류 코드), `ai_provider_error`(OpenAI 오류 분류), `db_save_failed`, `request_failed`를 남긴다. 질문·답변·비밀번호·API 키는 로그에 남기지 않는다.
+실패 시에는 `ai_call_failed`(오류 코드), `ai_provider_error`(SDK 오류 분류), `db_save_failed`, `request_failed`를 남긴다. 질문·답변·비밀번호·API 키는 로그에 남기지 않는다.
 
 ## 8. 디렉터리 구조
 
