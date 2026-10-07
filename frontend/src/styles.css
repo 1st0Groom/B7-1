@@ -158,13 +158,6 @@ form p[role="status"]:empty {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .loading-spinner,
-  .pending-spinner {
-    animation: none;
-  }
-}
-
 .auth-page h1,
 .chat-page h1 {
   margin: 0;
@@ -316,6 +309,13 @@ form p[role="status"]:empty {
   border-top-color: #356ae6;
   border-radius: 50%;
   animation: loading-spin 850ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner,
+  .pending-spinner {
+    animation: none;
+  }
 }
 
 .chat-page time {
