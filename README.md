@@ -97,10 +97,23 @@ curl -sS -b cookies.txt http://localhost:8000/api/me/chats
 
 `chats` 테이블에 사용자 ID, 생성 시각, 질문, 답변이 저장됩니다. `scripts/check_logs.sql`은 특정 사용자의 최근 대화 20건을 조회합니다.
 
+로컬에서는 저장소 루트에서 실행합니다.
+
 ```bash
 sqlite3 data/app.db '.parameter init' '.parameter set :user_id 1' '.read scripts/check_logs.sql'
-# 운영 서버: docker compose cp app:/data/app.db ./app.db 후 같은 명령을 app.db에 실행
 ```
+
+운영 EC2에서는 Docker 볼륨의 DB 사본을 임시 경로에 복사해 조회합니다. Amazon Linux 2023에서 `sqlite3` 명령이 없다면 먼저 CLI를 설치합니다.
+
+```bash
+sudo dnf install -y sqlite
+docker compose cp app:/data/app.db /tmp/b7-1-app.db
+sqlite3 -header -column /tmp/b7-1-app.db 'SELECT id, username FROM users;'
+# 아래 1은 조회할 계정의 실제 user_id로 바꿉니다.
+sqlite3 -header -column /tmp/b7-1-app.db '.parameter init' '.parameter set :user_id 1' '.read scripts/check_logs.sql'
+```
+
+DB 사본에는 계정과 대화 내용이 포함되므로 저장소에 추가하거나 외부에 공유하지 않습니다.
 
 ## 검증
 
