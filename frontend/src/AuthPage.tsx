@@ -22,8 +22,9 @@ export function AuthPage({ onLogin }: { onLogin: () => Promise<void> }) {
   }
 
   return (
-    <main>
-      <h1>B7-1 AI 챗봇</h1>
+    <main className="auth-page">
+      <h1>개발 초보자를 위한 AI 학습 챗봇</h1>
+      <p>어려운 개발 개념도 쉽게 질문하고, 차근차근 배워보세요.</p>
       <form onSubmit={submit}>
         <h2>{signup ? "회원가입" : "로그인"}</h2>
         <label htmlFor="username">아이디</label>
