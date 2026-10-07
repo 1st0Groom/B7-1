@@ -34,7 +34,7 @@ export function ChatPage({ chats, onAsked, onLogout }: Props) {
   }
 
   return (
-    <main>
+    <main className="chat-page">
       <header>
         <div>
           <h1>개발 초보자를 위한 AI 학습 챗봇</h1>
