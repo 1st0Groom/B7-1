@@ -84,11 +84,13 @@ export function ChatPage({ chats, onAsked, onLogout }: Props) {
         <label htmlFor="question">질문</label>
         <textarea
           id="question"
+          aria-describedby="question-count"
           maxLength={2000}
           required
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
         />
+        <p id="question-count">{question.length} / 2000자</p>
         <p role="status">{status}</p>
         <button type="submit" disabled={busy || !question.trim()}>
           질문 보내기
