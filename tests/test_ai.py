@@ -2,6 +2,10 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+import httpx
+from openai import APIError, APITimeoutError
+
+from app.errors import AppError
 from app.services.ai import SYSTEM_PROMPT, ChatCompletionsAdapter
 
 
@@ -40,3 +44,69 @@ class ChatCompletionsAdapterTests(unittest.IsolatedAsyncioTestCase):
                 {"role": "user", "content": "새 질문"},
             ],
         )
+
+    async def test_timeout_maps_to_ai_timeout(self):
+        settings = SimpleNamespace(
+            ai_api_key="test-key",
+            ai_base_url="https://copa.codyssey.kr/v1",
+            ai_model="gpt-5-mini",
+            ai_timeout_seconds=30,
+        )
+        timeout = APITimeoutError(request=httpx.Request("POST", "https://example.test"))
+
+        with patch("app.services.ai.AsyncOpenAI") as client_factory:
+            client_factory.return_value.chat.completions.create = AsyncMock(side_effect=timeout)
+            adapter = ChatCompletionsAdapter(settings)
+
+            with self.assertRaises(AppError) as raised:
+                await adapter.generate([], "질문")
+
+        self.assertEqual(raised.exception.code, "AI_TIMEOUT")
+
+    async def test_provider_error_maps_to_unavailable_and_logs_only_error_metadata(self):
+        settings = SimpleNamespace(
+            ai_api_key="test-key",
+            ai_base_url="https://copa.codyssey.kr/v1",
+            ai_model="gpt-5-mini",
+            ai_timeout_seconds=30,
+        )
+        provider_error = APIError(
+            "provider message", httpx.Request("POST", "https://example.test"), body=None
+        )
+
+        with (
+            patch("app.services.ai.AsyncOpenAI") as client_factory,
+            patch("app.services.ai.event") as log_event,
+        ):
+            client_factory.return_value.chat.completions.create = AsyncMock(
+                side_effect=provider_error
+            )
+            adapter = ChatCompletionsAdapter(settings)
+
+            with self.assertRaises(AppError) as raised:
+                await adapter.generate([], "질문")
+
+        self.assertEqual(raised.exception.code, "AI_UNAVAILABLE")
+        log_event.assert_called_once_with(
+            "ai_provider_error", category="APIError", status_code=None
+        )
+
+    async def test_empty_provider_answer_maps_to_unavailable(self):
+        settings = SimpleNamespace(
+            ai_api_key="test-key",
+            ai_base_url="https://copa.codyssey.kr/v1",
+            ai_model="gpt-5-mini",
+            ai_timeout_seconds=30,
+        )
+        response = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="  "))]
+        )
+
+        with patch("app.services.ai.AsyncOpenAI") as client_factory:
+            client_factory.return_value.chat.completions.create = AsyncMock(return_value=response)
+            adapter = ChatCompletionsAdapter(settings)
+
+            with self.assertRaises(AppError) as raised:
+                await adapter.generate([], "질문")
+
+        self.assertEqual(raised.exception.code, "AI_UNAVAILABLE")
