@@ -32,7 +32,12 @@ async def ask(db, ai, user_id, question):
     try:
         answer = await ai.generate(context, question)
     except AppError as exc:
-        event("ai_call_failed", user_id=user_id, code=exc.code)
+        event(
+            "ai_call_failed",
+            user_id=user_id,
+            code=exc.code,
+            latency_ms=int((time.monotonic() - start) * 1000),
+        )
         raise
     event("ai_call_success", user_id=user_id, latency_ms=int((time.monotonic() - start) * 1000))
     async with db.sessions() as session:
