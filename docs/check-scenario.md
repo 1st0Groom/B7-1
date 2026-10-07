@@ -122,7 +122,7 @@ for p in 8011 8012 8013; do echo ":$p alive $(code http://127.0.0.1:$p/) saved $
 
 | 서버 | 기대 응답 | 기대 로그 |
 | --- | --- | --- |
-| `:8011` 시간 초과 | `504 AI_TIMEOUT`, “현재 응답이 지연되고 있어요…” | `ai_call_failed` (`code: AI_TIMEOUT`) |
+| `:8011` 시간 초과 | `504 AI_TIMEOUT`, “현재 응답이 지연되고 있어요…” | `ai_provider_error` (`APITimeoutError`), `ai_call_failed` (`code: AI_TIMEOUT`, `latency_ms`) |
 | `:8012` 잘못된 키 | `502 AI_UNAVAILABLE` | `ai_provider_error` (`AuthenticationError`, 401), `ai_call_failed` |
 | `:8013` DB 실패 | `503 DB_UNAVAILABLE` | `ai_call_success` 다음 `db_save_failed` |
 
