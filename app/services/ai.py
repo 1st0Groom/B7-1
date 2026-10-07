@@ -1,12 +1,8 @@
-from openai import APIError, APITimeoutError, AsyncOpenAI
+from openai import APIError, APITimeoutError, AsyncOpenAI, RateLimitError
 
 from app.errors import AppError
 from app.logging import event
-
-SYSTEM_PROMPT = (
-    "You are a helpful learning assistant. Explain concepts clearly, use examples when useful, "
-    "and answer in the user's language. Be honest when uncertain."
-)
+from app.services.prompts import build_messages
 
 
 class OpenAIAdapter:
@@ -19,14 +15,23 @@ class OpenAIAdapter:
         )
 
     async def generate(self, history, question):
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-        for q, a in history:
-            messages.extend([{"role": "user", "content": q}, {"role": "assistant", "content": a}])
-        messages.append({"role": "user", "content": question})
+        messages = build_messages(history, question)
         try:
             result = await self.client.responses.create(model=self.model, input=messages)
         except APITimeoutError:
+            event("ai_provider_error", category="APITimeoutError", status_code=None)
             raise AppError("AI_TIMEOUT") from None
+        except RateLimitError as exc:
+            event("ai_provider_error", category="RateLimitError", status_code=429)
+            if exc.type == "insufficient_quota" or exc.code in {
+                "insufficient_quota",
+                "credit_balance_exhausted",
+                "organization_spend_limit_exceeded",
+                "project_spend_limit_exceeded",
+                "organization_usage_limit_exceeded",
+            }:
+                raise AppError("AI_QUOTA_EXCEEDED") from None
+            raise AppError("AI_RATE_LIMITED") from None
         except APIError as exc:
             event(
                 "ai_provider_error",
@@ -36,5 +41,6 @@ class OpenAIAdapter:
             raise AppError("AI_UNAVAILABLE") from None
         answer = result.output_text.strip()
         if not answer:
+            event("ai_provider_error", category="EmptyResponse", status_code=None)
             raise AppError("AI_UNAVAILABLE")
         return answer
