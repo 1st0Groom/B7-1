@@ -19,4 +19,3 @@ def allow(user_id, now=None):
         return False
     times.append(now)
     return True
-    
