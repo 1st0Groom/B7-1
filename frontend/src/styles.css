@@ -230,6 +230,26 @@ form p[role="status"]:empty {
   flex-shrink: 0;
 }
 
+.chat-page .learning-history {
+  margin-top: 28px;
+}
+
+.chat-page .learning-history h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+.chat-page .learning-history > p {
+  margin: 8px 0 0;
+  color: #667085;
+  line-height: 1.6;
+}
+
+.chat-page .learning-history ol {
+  margin-bottom: 0;
+}
+
 .chat-page ol {
   display: grid;
   gap: 16px;
