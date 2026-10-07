@@ -103,6 +103,67 @@ form p[role="status"]:empty {
   box-shadow: 0 8px 28px rgb(31 41 55 / 4%);
 }
 
+.initial-status {
+  width: min(100% - 32px, 480px);
+  margin: 24px auto;
+  color: #667085;
+  font-size: 14px;
+}
+
+.loading-page {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.loading-card {
+  width: min(100%, 480px);
+  padding: clamp(24px, 5vw, 40px);
+  border: 1px solid #dce5f2;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgb(31 41 55 / 4%);
+  text-align: center;
+}
+
+.loading-spinner {
+  display: block;
+  width: 32px;
+  height: 32px;
+  margin: 0 auto 24px;
+  border: 3px solid #dce5f2;
+  border-top-color: #356ae6;
+  border-radius: 50%;
+  animation: loading-spin 850ms linear infinite;
+}
+
+.loading-card h1 {
+  margin: 0;
+  font-size: clamp(22px, 3vw, 26px);
+  line-height: 1.4;
+}
+
+.loading-card p {
+  margin: 12px 0 0;
+  color: #667085;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner {
+    animation: none;
+  }
+}
+
 .auth-page h1,
 .chat-page h1 {
   margin: 0;

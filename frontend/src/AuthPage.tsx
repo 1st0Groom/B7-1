@@ -1,7 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { api } from "./api";
 
-export function AuthPage({ onLogin }: { onLogin: () => Promise<void> }) {
+export function AuthPage({
+  onLogin,
+}: {
+  onLogin: (reason: "signup" | "login") => Promise<void>;
+}) {
   const [signup, setSignup] = useState(false);
   const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -17,7 +21,7 @@ export function AuthPage({ onLogin }: { onLogin: () => Promise<void> }) {
     try {
       if (signup) await api.signup(credentials);
       await api.login(credentials);
-      await onLogin();
+      await onLogin(signup ? "signup" : "login");
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
     } finally {
