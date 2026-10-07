@@ -4,6 +4,7 @@ import { api } from "./api";
 export function AuthPage({ onLogin }: { onLogin: () => Promise<void> }) {
   const [signup, setSignup] = useState(false);
   const [status, setStatus] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -12,12 +13,15 @@ export function AuthPage({ onLogin }: { onLogin: () => Promise<void> }) {
       username: String(data.get("username")),
       password: String(data.get("password")),
     };
+    setSubmitting(true);
     try {
       if (signup) await api.signup(credentials);
       await api.login(credentials);
       await onLogin();
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -38,8 +42,20 @@ export function AuthPage({ onLogin }: { onLogin: () => Promise<void> }) {
           required
         />
         <p role="status">{status}</p>
-        <button type="submit">{signup ? "회원가입" : "로그인"}</button>
-        <button type="button" onClick={() => setSignup(!signup)}>
+        <button type="submit" disabled={submitting}>
+          {submitting
+            ? signup
+              ? "가입 중..."
+              : "로그인 중..."
+            : signup
+              ? "회원가입"
+              : "로그인"}
+        </button>
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={() => setSignup(!signup)}
+        >
           {signup ? "로그인으로" : "회원가입으로"}
         </button>
       </form>
