@@ -7,6 +7,6 @@
 | 미정 | 인증·세션·접근 제어 | 미작성 | 미작성 | 미작성 |
 | 미정 | 대화 API·DB·AI API | 미작성 | 미작성 | 미작성 |
 | 미정 | 화면·입력·오류 처리 | 미작성 | 미작성 | 미작성 |
-| 미정 | 배포·로그·통합 검증 | 미작성 | 미작성 | 미작성 |
+| @1st0Groom | 배포·로그·통합 검증 | CloudFormation으로 EC2를 구성하고 Docker Compose로 배포했다. 외부 접속, 로그인 후 네이토 응답, 앱 재시작 후 대화 기록 유지를 확인하고 Buildx·SQLite 운영 절차를 문서화했다. | [6fcac7d](https://github.com/1st0Groom/B7-1/commit/6fcac7d), [4e2f123](https://github.com/1st0Groom/B7-1/commit/4e2f123), [acd363d](https://github.com/1st0Groom/B7-1/commit/acd363d), [0178097](https://github.com/1st0Groom/B7-1/commit/0178097) | [PR #16](https://github.com/codyssey-kr/B7-1/pull/16), [PR #17](https://github.com/codyssey-kr/B7-1/pull/17) |
 
 팀 인원에 맞게 역할을 조정하고 각 기능 담당자가 테스트와 문서를 함께 작성한다. 기능 브랜치 → PR → 다른 팀원 검토 → merge commit 순서로 통합한다. 팀원별 유의미한 커밋 10회 이상과 PR 기반 머지 기록은 실제 Git 이력으로 증빙한다. 자동 생성된 초기 구현이나 이 문서의 역할 예시만으로 개인 기여 요건이 충족되지는 않는다.
