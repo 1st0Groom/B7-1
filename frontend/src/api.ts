@@ -22,6 +22,7 @@ async function request<T>(
   path: string,
   method = "GET",
   body?: unknown,
+  signal?: AbortSignal,
 ): Promise<T> {
   let response: Response;
   try {
@@ -29,6 +30,7 @@ async function request<T>(
       method,
       headers: body === undefined ? {} : { "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
     });
   } catch {
     throw new APIError("서버와 연결할 수 없습니다.", 0);
@@ -49,5 +51,6 @@ export const api = {
   login: (body: Credentials) => request("/auth/login", "POST", body),
   logout: () => request("/auth/logout", "POST"),
   chats: () => request<Chat[]>("/me/chats"),
-  ask: (question: string) => request<Chat>("/chat", "POST", { question }),
+  ask: (question: string, signal?: AbortSignal) =>
+    request<Chat>("/chat", "POST", { question }, signal),
 };

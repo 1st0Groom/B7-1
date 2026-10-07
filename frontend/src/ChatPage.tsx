@@ -1,5 +1,7 @@
-import { useState, type FormEvent } from "react";
-import { APIError, api, type Chat } from "./api";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { api, type Chat } from "./api";
+import { ChatMessages } from "./ChatMessages";
+import { useChatRequest } from "./useChatRequest";
 
 const exampleQuestions = [
   "변수와 함수의 차이가 뭐야?",
@@ -15,26 +17,53 @@ interface Props {
 
 export function ChatPage({ chats, onAsked, onLogout }: Props) {
   const [question, setQuestion] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState("");
+  const pendingRef = useRef<HTMLLIElement>(null);
+  const lastChatRef = useRef<HTMLLIElement>(null);
+  const scrollTarget = useRef<"pending" | "complete" | null>(null);
+  const { pendingQuestion, status, send, cancel } = useChatRequest({
+    onSuccess: handleAnswer,
+    onUnauthorized: onLogout,
+  });
+  const busy = pendingQuestion !== null;
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setStatus("답변을 생성하고 있어요…");
-    try {
-      onAsked(await api.ask(question));
-      setQuestion("");
-      setStatus("");
-    } catch (e) {
-      if (e instanceof APIError && e.status === 401) return onLogout();
-      setStatus(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
+  useEffect(() => {
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)")
+      .matches
+      ? "auto"
+      : "smooth";
+    if (scrollTarget.current === "pending" && pendingQuestion !== null) {
+      pendingRef.current?.scrollIntoView({ behavior, block: "end" });
+      scrollTarget.current = null;
+    } else if (
+      scrollTarget.current === "complete" &&
+      pendingQuestion === null
+    ) {
+      lastChatRef.current?.scrollIntoView({ behavior, block: "end" });
+      scrollTarget.current = null;
     }
+  }, [pendingQuestion, chats.length]);
+
+  function handleAnswer(chat: Chat) {
+    const pendingRect = pendingRef.current?.getBoundingClientRect();
+    scrollTarget.current =
+      pendingRect &&
+      pendingRect.bottom > 0 &&
+      pendingRect.top < window.innerHeight
+        ? "complete"
+        : null;
+    onAsked(chat);
+    setQuestion("");
+  }
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (busy || !question.trim()) return;
+    scrollTarget.current = "pending";
+    void send(question);
   }
 
   async function logout() {
+    cancel();
     await api.logout().catch(() => {});
     onLogout();
   }
@@ -48,18 +77,13 @@ export function ChatPage({ chats, onAsked, onLogout }: Props) {
         </div>
         <button onClick={() => void logout()}>로그아웃</button>
       </header>
-      <ol>
-        {chats.map((chat) => (
-          <li key={chat.id}>
-            <p>{chat.question}</p>
-            <p className="answer">{chat.answer}</p>
-            <time dateTime={chat.created_at}>
-              {new Date(chat.created_at).toLocaleString()}
-            </time>
-          </li>
-        ))}
-      </ol>
-      {chats.length === 0 && (
+      <ChatMessages
+        chats={chats}
+        pendingQuestion={pendingQuestion}
+        lastChatRef={lastChatRef}
+        pendingRef={pendingRef}
+      />
+      {chats.length === 0 && pendingQuestion === null && (
         <section
           className="example-questions"
           aria-labelledby="example-questions-heading"
@@ -84,11 +108,14 @@ export function ChatPage({ chats, onAsked, onLogout }: Props) {
         <label htmlFor="question">질문</label>
         <textarea
           id="question"
+          aria-describedby="question-count"
           maxLength={2000}
           required
+          disabled={busy}
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
         />
+        <p id="question-count">{question.length} / 2000자</p>
         <p role="status">{status}</p>
         <button type="submit" disabled={busy || !question.trim()}>
           질문 보내기
