@@ -159,7 +159,8 @@ form p[role="status"]:empty {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .loading-spinner {
+  .loading-spinner,
+  .pending-spinner {
     animation: none;
   }
 }
@@ -260,7 +261,15 @@ form p[role="status"]:empty {
   line-height: 1.65;
 }
 
-.chat-page li p:first-child {
+.chat-page .message-label {
+  display: block;
+  margin-bottom: 6px;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.chat-page li > p:not(.answer) {
   margin-bottom: 16px;
   font-weight: 600;
 }
@@ -270,6 +279,23 @@ form p[role="status"]:empty {
   border-radius: 10px;
   background: #eef4ff;
   white-space: pre-wrap;
+}
+
+.chat-page .pending-answer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #667085;
+}
+
+.pending-spinner {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #c8d9f8;
+  border-top-color: #356ae6;
+  border-radius: 50%;
+  animation: loading-spin 850ms linear infinite;
 }
 
 .chat-page time {

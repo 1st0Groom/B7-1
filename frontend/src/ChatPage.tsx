@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { APIError, api, type Chat } from "./api";
 
 const exampleQuestions = [
@@ -6,6 +6,7 @@ const exampleQuestions = [
   "API가 뭔지 쉽게 설명해줘",
   "Git과 GitHub는 뭐가 달라?",
 ];
+const MIN_PENDING_DISPLAY_MS = 3000;
 
 interface Props {
   chats: Chat[];
@@ -16,20 +17,55 @@ interface Props {
 export function ChatPage({ chats, onAsked, onLogout }: Props) {
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [status, setStatus] = useState("");
+  const pendingRef = useRef<HTMLLIElement>(null);
+  const lastChatRef = useRef<HTMLLIElement>(null);
+  const scrollTarget = useRef<"pending" | "complete" | null>(null);
+
+  useEffect(() => {
+    if (scrollTarget.current === "pending" && pendingQuestion !== null) {
+      pendingRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      scrollTarget.current = null;
+    } else if (
+      scrollTarget.current === "complete" &&
+      pendingQuestion === null
+    ) {
+      lastChatRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      scrollTarget.current = null;
+    }
+  }, [pendingQuestion, chats.length]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy || !question.trim()) return;
+    const submittedQuestion = question;
+    const pendingStartedAt = performance.now();
+    scrollTarget.current = "pending";
+    setPendingQuestion(submittedQuestion);
     setBusy(true);
-    setStatus("답변을 생성하고 있어요…");
+    setStatus("");
     try {
-      onAsked(await api.ask(question));
+      const chat = await api.ask(submittedQuestion);
+      const remaining =
+        MIN_PENDING_DISPLAY_MS - (performance.now() - pendingStartedAt);
+      if (remaining > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, remaining));
+      }
+      const pendingRect = pendingRef.current?.getBoundingClientRect();
+      scrollTarget.current =
+        pendingRect &&
+        pendingRect.bottom > 0 &&
+        pendingRect.top < window.innerHeight
+          ? "complete"
+          : null;
+      onAsked(chat);
       setQuestion("");
-      setStatus("");
     } catch (e) {
       if (e instanceof APIError && e.status === 401) return onLogout();
       setStatus(e instanceof Error ? e.message : String(e));
     } finally {
+      setPendingQuestion(null);
       setBusy(false);
     }
   }
@@ -49,15 +85,31 @@ export function ChatPage({ chats, onAsked, onLogout }: Props) {
         <button onClick={() => void logout()}>로그아웃</button>
       </header>
       <ol>
-        {chats.map((chat) => (
-          <li key={chat.id}>
+        {chats.map((chat, index) => (
+          <li
+            key={chat.id}
+            ref={index === chats.length - 1 ? lastChatRef : null}
+          >
+            <span className="message-label">나</span>
             <p>{chat.question}</p>
+            <span className="message-label">AI 학습 도우미</span>
             <p className="answer">{chat.answer}</p>
             <time dateTime={chat.created_at}>
               {new Date(chat.created_at).toLocaleString()}
             </time>
           </li>
         ))}
+        {pendingQuestion !== null && (
+          <li ref={pendingRef}>
+            <span className="message-label">나</span>
+            <p>{pendingQuestion}</p>
+            <span className="message-label">AI 학습 도우미</span>
+            <p className="answer pending-answer" role="status">
+              <span className="pending-spinner" aria-hidden="true" />
+              답변을 만들고 있어요...
+            </p>
+          </li>
+        )}
       </ol>
       {chats.length === 0 && (
         <section
@@ -87,6 +139,7 @@ export function ChatPage({ chats, onAsked, onLogout }: Props) {
           aria-describedby="question-count"
           maxLength={2000}
           required
+          disabled={busy}
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
         />
