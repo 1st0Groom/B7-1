@@ -8,6 +8,7 @@ from app.database import commit
 from app.errors import AppError
 from app.logging import event
 from app.models import Chat
+from app.services import rate_limit
 
 CONTEXT_TURNS = 5
 CONTEXT_MAX_CHARS = 4000
@@ -29,6 +30,9 @@ async def history(db, user_id):
 
 
 async def ask(db, ai, user_id, question):
+    if not rate_limit.allow(user_id):
+        event("chat_rate_limited", user_id=user_id)
+        raise AppError("CHAT_RATE_LIMITED")
     async with db.sessions() as session:
         recent = await session.scalars(
             select(Chat)

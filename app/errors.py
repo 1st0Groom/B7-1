@@ -5,6 +5,7 @@ ERRORS = {
     "INVALID_CREDENTIALS": (401, "아이디 또는 비밀번호를 확인해 주세요."),
     "USERNAME_ALREADY_EXISTS": (409, "이미 가입된 아이디입니다."),
     "VALIDATION_ERROR": (422, "입력 형식과 길이를 확인해 주세요."),
+    "CHAT_RATE_LIMITED": (429, "질문을 너무 자주 보내고 있어요. 잠시 후 다시 시도해 주세요."),
     "AI_TIMEOUT": (504, "현재 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요."),
     "AI_UNAVAILABLE": (502, "AI 응답을 받을 수 없습니다. 잠시 후 다시 시도해 주세요."),
     "AI_RATE_LIMITED": (503, "지금 질문이 많이 몰려 있어요. 잠시 후 다시 시도해 주세요."),

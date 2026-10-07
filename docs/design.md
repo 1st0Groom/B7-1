@@ -105,7 +105,10 @@ sequenceDiagram
 
 - **문맥 전략**: 같은 사용자의 최근 문답 최대 5쌍을 오래된 순서로 보내고 현재 질문을 붙인다.
 - **입력 검증**: 질문은 앞뒤 공백을 제거한 뒤 1~2,000자여야 한다. 위반 시 `422`이며 AI를 호출하지 않는다.
+- **질문 횟수 제한**: 인증·입력 검증을 통과한 요청을 사용자별 최근 60초 동안 최대 10회 허용한다. 초과 시 대화 문맥 조회·AI 호출 전에 `429 CHAT_RATE_LIMITED`를 반환한다. 허용 후 AI·DB 처리에 실패한 요청도 횟수에 포함되며, 제한으로 거절된 요청은 횟수에 추가하지 않는다.
 - **시간 제한**: OpenAI 호출은 `AI_TIMEOUT_SECONDS`(기본 30초) 제한, 자동 재시도 0회.
+
+질문 횟수 기록은 서버 프로세스 메모리에 저장하므로 재시작하면 초기화되고, 여러 프로세스 간에는 공유되지 않는다. 비활성 사용자의 만료 기록 정리는 후속 개선으로 남긴다.
 
 ## 6. API 명세
 
@@ -157,6 +160,7 @@ Cookie: session=<로그인 시 발급된 토큰>
 | 잘못된 아이디·비밀번호 | `401 INVALID_CREDENTIALS` |
 | 아이디 중복 | `409 USERNAME_ALREADY_EXISTS` |
 | 입력 검증 실패(빈 질문·길이 초과, 빈 아이디·비밀번호) | `422 VALIDATION_ERROR` |
+| 사용자별 질문 횟수 제한 초과 | `429 CHAT_RATE_LIMITED` |
 | AI 시간 초과 | `504 AI_TIMEOUT` |
 | AI 인증·네트워크 오류·빈 응답 | `502 AI_UNAVAILABLE` |
 | AI의 일시적인 요청 제한 | `503 AI_RATE_LIMITED` |
@@ -177,7 +181,7 @@ OpenAI의 `429`는 `error.code`와 `error.type`으로 원인을 구분한다. �
 {"event": "db_save_success", "request_id": "abc123", "phase": "chat", "user_id": 12}
 ```
 
-실패 시에는 `ai_call_failed`(오류 코드), `ai_provider_error`(OpenAI 오류 분류), `db_save_failed`, `request_failed`를 남긴다. 질문·답변·비밀번호·API 키는 로그에 남기지 않는다.
+실패 시에는 `chat_rate_limited`(사용자별 질문 제한), `ai_call_failed`(오류 코드), `ai_provider_error`(OpenAI 오류 분류), `db_save_failed`, `request_failed`를 남긴다. 질문·답변·비밀번호·API 키는 로그에 남기지 않는다.
 
 ## 8. 디렉터리 구조
 
