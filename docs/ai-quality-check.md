@@ -1,94 +1,62 @@
-# AI 답변 품질 점검
+# AI 응답 수동 점검
 
-시스템 프롬프트(`app/services/prompts.py`)나 문맥 설정(`app/services/chat.py`)을 바꿀 때마다 아래 질문 세트로 같은 방식으로 점검하고 결과를 기록한다. 대상 사용자는 개발 초보자다.
+시스템 프롬프트(`app/services/prompts.py`)나 문맥 설정(`app/services/chat.py`) 변경 후, 아래 사례의 응답이 기대한 동작을 하는지 사람이 확인한다. 이 결과는 해당 사례의 관찰 기록이며 챗봇 전체의 품질 점수로 해석하지 않는다.
 
-## 1. 정성 평가: 고정 질문 세트
+## 1. 점검 준비
 
-평가 회차마다 새 테스트 계정을 만들고 대화 기록이 없는 화면에서 시작한다. 로그아웃·재로그인해도 기존 대화는 남는다. 변경 전후에는 같은 `AI_MODEL`과 질문 순서를 사용한다.
-
-운영 서버의 같은 터미널에서 아래 변수를 준비한다. 출력된 이름으로 웹에서 회원가입한 뒤, 그 계정은 이번 평가에만 사용한다.
-
-```bash
-REVIEW_USER="quality-$(date -u +%Y%m%dT%H%M%SZ)"
-REVIEW_START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-REVIEW_LOG="${REVIEW_USER}.log"
-printf '평가 계정: %s\n' "$REVIEW_USER"
-```
-
-웹 화면에서 아래 질문을 순서대로 보내고, 각 응답이나 오류 안내가 나온 뒤 다음 질문으로 진행한다. 같은 회차에서 실패한 질문을 추가로 재시도하지 않는다. 2번과 4번은 바로 앞 질문에 이어서 보낸다(문맥 유지 확인).
-
-| # | 질문 | 확인할 점 |
-| --- | --- | --- |
-| 1 | 변수와 함수의 차이가 뭐야? | 핵심 답을 먼저 말하는가 |
-| 2 | 간단한 예시도 보여줘 | 1번 내용을 이어받아 짧은 코드 예시를 주는가 |
-| 3 | API가 뭔지 쉽게 설명해줘 | 일상 비유를 쓰는가, 용어를 풀어 주는가 |
-| 4 | 그럼 REST API는? | 3번 문맥을 이어받는가 |
-| 5 | Git과 GitHub는 뭐가 달라? | 둘을 헷갈리지 않게 비교하는가 |
-| 6 | async/await가 뭐야? | 초보자 수준으로 설명하는가 |
-| 7 | What is a database? | 영어로 답하는가 |
-| 8 | 파이썬 `list.magic_sort()` 사용법 알려줘 | 없는 함수를 지어내지 않고 없다고 말하는가 |
-| 9 | 그거 | 모호한 질문에 되묻거나 모른다고 말하는가 |
-| 10 | 공백만 입력 | 화면에서 전송이 막히는가 (서버는 422) |
-
-## 2. 채점 기준
-
-1~9번 답변마다 아래 4개 항목을 1~5점으로 매긴다. 10번은 통과/실패만 기록한다.
-
-| 항목 | 5점 | 1점 |
-| --- | --- | --- |
-| 정확성 | 틀린 내용이 없다 | 핵심 내용이 틀렸다 |
-| 이해하기 쉬움 | 용어를 풀어 쓰고 단계적으로 설명한다 | 전문 용어를 설명 없이 나열한다 |
-| 예시 | 짧고 실행 가능한 예시나 적절한 비유가 있다 | 필요한데 예시가 없거나 너무 길다 |
-| 문맥·정직성 | 앞 대화를 이어받고, 모르면 모른다고 한다 | 앞 대화를 무시하거나 내용을 지어낸다 |
-
-## 3. 정량 지표: 서버 로그
-
-모든 질문의 응답이나 오류 안내를 확인한 뒤, 앞서 변수를 준비한 터미널에서 로그를 저장한다. 시작 시각 이후의 로그 중 평가 계정의 `ai_call_start`에 연결된 요청 ID만 선택한다. `user_id`가 없는 `ai_provider_error`도 같은 요청 ID로 함께 보관한다.
+- 다른 사용자 요청과 진행 중인 AI 요청이 없는 로컬·점검용 서버에서 실행한다. 운영 트래픽이 섞이면 아래 단순 로그 집계로 회차별 지표를 계산하지 않는다.
+- 회차마다 새 테스트 계정을 만들고 대화 기록이 없는 화면에서 시작한다. 로그아웃·재로그인은 대화를 초기화하지 않는다.
+- 변경 전후에는 같은 `AI_MODEL`과 질문 순서를 사용하고, 계정·모델·변경 커밋을 결과에 기록한다.
+- 첫 질문을 보내기 직전, 서버의 같은 터미널에서 아래 변수를 설정한다. 서버 컨테이너의 UTC 시각을 사용한다.
 
 ```bash
-docker compose logs --no-color --no-log-prefix --since "$REVIEW_START" app > "${REVIEW_USER}-all.log"
-docker compose exec -T app python -c '
-import json
-import sqlite3
-import sys
-
-with sqlite3.connect("file:/data/app.db?mode=ro", uri=True) as db:
-    user = db.execute("SELECT id FROM users WHERE username = ?", (sys.argv[1],)).fetchone()
-if user is None:
-    raise SystemExit("평가 계정을 찾을 수 없습니다.")
-
-events = []
-for line in sys.stdin:
-    try:
-        events.append(json.loads(line))
-    except json.JSONDecodeError:
-        continue
-request_ids = {
-    event["request_id"] for event in events
-    if event.get("event") == "ai_call_start" and event.get("user_id") == user[0]
-}
-for event in events:
-    if event.get("request_id") in request_ids:
-        print(json.dumps(event, ensure_ascii=False))
-' "$REVIEW_USER" < "${REVIEW_USER}-all.log" > "$REVIEW_LOG"
+REVIEW_START=$(docker compose exec -T app python -c 'from datetime import UTC, datetime; print(datetime.now(UTC).isoformat())')
+REVIEW_LOG="ai-check-$(date -u +%Y%m%dT%H%M%SZ).log"
 ```
 
-이후 지표는 필터링된 `REVIEW_LOG` 파일에서만 집계한다. 다른 계정이나 이전 평가의 로그가 포함된 `-all.log` 파일은 집계에 사용하지 않는다.
+## 2. 고정 질문과 확인 기준
+
+각 응답이나 오류 안내가 나온 뒤 다음 질문으로 진행한다. 2번·4번은 바로 앞 질문의 후속 질문이다. 실패한 질문을 같은 회차에서 추가로 재시도하지 않는다.
+
+| # | 질문 | 확인 기준 |
+| --- | --- | --- |
+| 1 | 변수와 함수의 차이가 뭐야? | 변수의 값 저장·참조 역할과 함수의 호출 가능한 작업 단위를 구분한다 |
+| 2 | 간단한 예시도 보여줘 | 1번의 변수·함수를 설명하는 예시를 제공한다 |
+| 3 | API가 뭔지 쉽게 설명해줘 | 프로그램 사이에서 기능·데이터를 주고받는 인터페이스라는 핵심을 설명한다 |
+| 4 | 그럼 REST API는? | 3번의 API 문맥에 이어 리소스와 HTTP 메서드 등의 개념을 설명한다 |
+| 5 | Git과 GitHub는 뭐가 달라? | 버전 관리 도구와 Git 저장소 호스팅·협업 서비스를 구분한다 |
+| 6 | async/await가 뭐야? | 비동기 작업과 결과를 기다리는 역할을 설명하고, 항상 병렬 실행·속도 향상을 보장한다고 단정하지 않는다 |
+| 7 | What is a database? | 데이터베이스의 기본 역할을 영어로 설명한다 |
+| 8 | 파이썬 `list.magic_sort()` 사용법 알려줘 | 해당 내장 메서드가 없다고 설명하며 사용법을 지어내지 않는다 |
+| 9 | 그거 | 앞 문맥으로 대상을 식별할 수 있으면 이어서 설명하고, 불명확하면 확인 질문을 한다. 무조건 되물어야 통과하는 항목은 아니다 |
+| 10 | 공백만 입력 | 화면에서 전송이 차단된다. 서버 입력 검증은 [기능 점검 시나리오](check-scenario.md#3-입력-검증-45)의 직접 요청으로 별도 확인한다 |
+
+## 3. 판정과 기록
+
+각 항목을 **통과 / 실패 / 판정 보류**로 기록하고 실제 답변 또는 발췌와 판단 이유를 함께 남긴다. 핵심 내용의 오류나 기준 위반을 확인하면 실패, 근거가 부족하거나 문맥상 판단이 어려우면 판정 보류로 둔다. 단순한 표현·길이 선호만으로 실패 처리하지 않는다. 예시 코드는 가능한 경우 실행해 확인한다.
+
+1~5점 평균은 계산하지 않는다. API 오류로 답변을 받지 못한 항목은 응답 내용의 판정을 보류하고 오류 코드도 기록한다. 10번은 모델 답변 품질이 아닌 입력 검증 항목이다.
+
+| 날짜·변경 커밋 | 계정·모델 | 질문 번호 | 판정 | 실제 답변·관찰 | 판단 이유 |
+| --- | --- | --- | --- | --- | --- |
+| | | | | | |
+
+## 4. 운영 지표: 이번 회차의 서버 로그
+
+모든 요청이 끝난 뒤 준비 단계와 같은 터미널에서 수집한다. 새 회차를 시작하기 전에 이 파일을 저장한다.
+
+```bash
+docker compose logs --no-color --no-log-prefix --since "$REVIEW_START" app > "$REVIEW_LOG"
+```
 
 | 지표 | 확인 방법 |
 | --- | --- |
 | AI 호출 수 | `grep -c '"event": "ai_call_start"' "$REVIEW_LOG"` |
 | AI 실패 수 | `grep -c '"event": "ai_call_failed"' "$REVIEW_LOG"` |
-| 실패 원인 | `grep '"event": "ai_provider_error"' "$REVIEW_LOG"` 의 `category` |
-| AI 호출 성공 시 소요 시간 | `grep '"event": "ai_call_success"' "$REVIEW_LOG"` 의 `latency_ms` |
-| 문맥으로 보낸 대화 수 | `grep '"event": "ai_call_start"' "$REVIEW_LOG"` 의 `context_turns` |
+| 실패 분류 | `grep '"event": "ai_call_failed"' "$REVIEW_LOG"`의 `code`, 같은 `request_id`를 가진 `ai_provider_error`의 `category` |
+| AI 호출 성공 시 소요 시간 | `grep '"event": "ai_call_success"' "$REVIEW_LOG"`의 `latency_ms` |
+| 전달한 문답 수 | `grep '"event": "ai_call_start"' "$REVIEW_LOG"`의 `context_turns` |
 
-실패율 = AI 실패 수 ÷ AI 호출 수. 호출 수가 0이면 실패율을 계산하지 않고 미측정으로 기록한다. 1~9번을 모두 보낸 회차의 호출 수가 9가 아니면 인증·입력 검증·질문 횟수 제한 또는 로그 수집 범위를 먼저 확인한다.
+실패율은 AI 실패 수 ÷ AI 호출 수로 계산한다. 호출 수가 0이면 미측정으로 기록한다. 1~9번을 모두 보냈는데 호출 수가 9가 아니면 인증·입력 검증·질문 횟수 제한과 로그 수집 범위를 확인한다.
 
-## 4. 결과 기록
-
-메모에 평가 계정, 사용한 `AI_MODEL`, 해당 회차의 로그 파일명을 함께 남긴다.
-
-| 날짜 | 바꾼 내용 | 1~9번 평균 점수 | 10번 | 실패율 | 메모 |
-| --- | --- | --- | --- | --- | --- |
-| | | | | | |
+실패율과 소요 시간은 운영 안정성·속도 지표이며 응답 내용의 정확성을 나타내지 않는다. 회차별 로그 파일명과 지표를 위 수동 점검 기록에 함께 보관한다.
