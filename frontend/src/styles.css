@@ -218,6 +218,46 @@ form p[role="status"]:empty {
   font-size: 12px;
 }
 
+.chat-page .example-questions {
+  width: 100%;
+  max-width: 720px;
+  margin: 20px auto 0;
+  padding: 20px;
+  border: 1px solid #dce5f2;
+  border-radius: 16px;
+  background: #eef4ff;
+}
+
+.chat-page .example-questions h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.chat-page .example-questions p {
+  margin: 6px 0 16px;
+  color: #667085;
+  line-height: 1.6;
+}
+
+.chat-page .example-questions-list {
+  display: grid;
+  gap: 10px;
+}
+
+.chat-page .example-questions button {
+  width: 100%;
+  border-color: #c8d9f8;
+  background: #fff;
+  color: #2856c7;
+  text-align: left;
+}
+
+.chat-page .example-questions button:hover {
+  border-color: #a9bde0;
+  background: #f6f9fe;
+}
+
 .chat-page form {
   width: 100%;
   max-width: 720px;
@@ -251,7 +291,8 @@ form p[role="status"]:empty {
   }
 
   .chat-page li,
-  .chat-page form {
+  .chat-page form,
+  .chat-page .example-questions {
     padding: 20px 16px;
   }
 
