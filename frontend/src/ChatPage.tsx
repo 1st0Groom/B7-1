@@ -36,7 +36,10 @@ export function ChatPage({ chats, onAsked, onLogout }: Props) {
   return (
     <main>
       <header>
-        <h1>B7-1 AI 챗봇</h1>
+        <div>
+          <h1>개발 초보자를 위한 AI 학습 챗봇</h1>
+          <p>어려운 개발 개념도 쉽게 질문하고, 차근차근 배워보세요.</p>
+        </div>
         <button onClick={() => void logout()}>로그아웃</button>
       </header>
       <ol>
