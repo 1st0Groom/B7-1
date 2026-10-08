@@ -13,8 +13,8 @@ Metadata:
       - Limit SSH ingress to the operator's public IPv4 /32.
       - Back up SQLite before deleting the stack; the instance root disk is removed.
     ref:
-      - at: README.md
-        has: Application ports, SQLite volume, and Docker Compose deployment steps.
+      - at: infra/README.md
+        has: CloudFormation setup, Docker Compose deployment, and SQLite backup steps.
         scope: B7-1 runtime contract
 
 Parameters:
