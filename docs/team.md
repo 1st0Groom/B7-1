@@ -5,8 +5,8 @@
 | 팀원 | 담당 기능 | 개인 작업 요약 |
 | --- | --- | --- |
 | 미정 | 인증·세션·접근 제어 | 미작성 |
-| @SeouliteParker | AI 채팅 (질문 처리·문맥 구성·OpenAI 호출·대화 로그) | AI 호출 실패 원인·소요 시간 로그 추가, 문맥 글자 수 상한(4,000자) 적용, 시스템 프롬프트를 `prompts.py`로 분리, 개발 초보자 기준 시스템 프롬프트 개선 |
-| solbao-dev | 프론트엔드 화면·UX 개선, 팀 Git/PR 협업 규칙 문서화 | 초보자용 화면·예시 질문, 인증·질문 입력·응답 대기·학습 기록 UX 개선; Git/PR 협업 규칙 작성 |
+| @SeouliteParker | AI 채팅 (질문 처리·문맥 구성·OpenAI 호출·대화 로그) | AI 호출 실패 원인·소요 시간 로그 추가, 문맥 글자 수 상한(4,000자) 적용, 시스템 프롬프트를 `prompts.py`로 분리, 개발 초보자 기준 시스템 프롬프트 개선 ([#1](https://github.com/codyssey-kr/B7-1/pull/1), [#2](https://github.com/codyssey-kr/B7-1/pull/2), [#3](https://github.com/codyssey-kr/B7-1/pull/3), [#6](https://github.com/codyssey-kr/B7-1/pull/6)) |
+| solbao-dev | 프론트엔드 화면·UX 개선, 팀 Git/PR 협업 규칙 문서화 | 초보자용 화면·예시 질문, 인증·질문 입력·응답 대기·학습 기록 UX 개선; Git/PR 협업 규칙 작성 ([#4](https://github.com/codyssey-kr/B7-1/pull/4), [#5](https://github.com/codyssey-kr/B7-1/pull/5), [#13](https://github.com/codyssey-kr/B7-1/pull/13)) |
 | 미정 | 배포·로그·통합 검증 | 미작성 |
 
 팀 인원에 맞게 역할을 조정하고 각 기능 담당자가 테스트와 문서를 함께 작성한다. 기능 브랜치 → PR → 다른 팀원 검토 → merge commit 순서로 통합한다. 팀원별 유의미한 커밋 10회 이상과 PR 기반 머지 기록은 실제 Git 이력으로 증빙한다. 자동 생성된 초기 구현이나 이 문서의 역할 예시만으로 개인 기여 요건이 충족되지는 않는다.
