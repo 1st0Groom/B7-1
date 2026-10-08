@@ -37,6 +37,7 @@ flowchart LR
 | 인증 서비스 | `app/services/auth.py` | 가입, 비밀번호 검증, 세션 발급·조회·삭제 |
 | 채팅 서비스 | `app/services/chat.py` | 최근 문맥 조회 → AI 호출 → 문답 저장, 내 로그 조회 |
 | AI 어댑터 | `app/services/ai.py` | OpenAI 호출, 시간 제한, 오류 분류 |
+| 프롬프트 구성 | `app/services/prompts.py` | 시스템 지침, 최근 문답, 현재 질문을 AI에 보낼 메시지로 조립 |
 | DB | `app/models.py`, `app/database.py` | 테이블 정의, 세션, 저장 성공·실패 로그 |
 | 화면 | `frontend/src/` | 로그인·회원가입 화면, 채팅 화면 |
 
@@ -110,11 +111,12 @@ sequenceDiagram
         F->>D: 질문·답변 저장
         F-->>B: 200 저장된 문답 (저장 실패 시 503)
     else AI 실패 또는 시간 초과
-        F-->>B: 502 / 504 오류 안내, 저장하지 않음
+        F-->>B: 502 / 503 / 504 오류 안내, 저장하지 않음
     end
 ```
 
-- **문맥 전략**: 같은 사용자의 최근 문답 최대 5쌍을 오래된 순서로 보내고 현재 질문을 붙인다.
+- **문맥 전략**: 같은 사용자의 최근 문답 최대 5쌍을 오래된 순서로 보내고 현재 질문을 붙인다. 문답의 글자 수 합계가 4,000자를 넘으면 오래된 문답부터 뺀다.
+- **답변 방식**: 시스템 지침은 개발 초보자 기준이다. 핵심 답을 먼저 말하고, 용어는 처음 나올 때 풀어 쓰고, 코드 예시는 짧게 들고, 확실하지 않으면 추측하지 않고 솔직하게 말하도록 한다.
 - **입력 검증**: 질문은 앞뒤 공백을 제거한 뒤 1~2,000자여야 한다. 위반 시 `422`이며 AI를 호출하지 않는다.
 - **질문 횟수 제한**: 인증·입력 검증을 통과한 요청을 사용자별 최근 60초 동안 최대 10회 허용한다. 초과 시 대화 문맥 조회·AI 호출 전에 `429 CHAT_RATE_LIMITED`를 반환한다. 허용 후 AI·DB 처리에 실패한 요청도 횟수에 포함되며, 제한으로 거절된 요청은 횟수에 추가하지 않는다.
 - **시간 제한**: OpenAI 호출은 `AI_TIMEOUT_SECONDS`(기본 30초) 제한, 자동 재시도 0회.
@@ -187,12 +189,12 @@ OpenAI의 `429`는 `error.code`와 `error.type`으로 원인을 구분한다. �
 
 ```text
 {"event": "request_received", "request_id": "abc123", "method": "POST", "path": "/api/chat"}
-{"event": "ai_call_start", "request_id": "abc123", "user_id": 12}
+{"event": "ai_call_start", "request_id": "abc123", "user_id": 12, "context_turns": 2}
 {"event": "ai_call_success", "request_id": "abc123", "user_id": 12, "latency_ms": 1240}
 {"event": "db_save_success", "request_id": "abc123", "phase": "chat", "user_id": 12}
 ```
 
-실패 시에는 `chat_rate_limited`(사용자별 질문 제한), `ai_call_failed`(오류 코드), `ai_provider_error`(OpenAI 오류 분류), `db_save_failed`, `request_failed`를 남긴다. 질문·답변·비밀번호·API 키는 로그에 남기지 않는다.
+실패 시에는 `chat_rate_limited`(사용자별 질문 제한), `ai_call_failed`(오류 코드, 걸린 시간 `latency_ms`), `ai_provider_error`(OpenAI 오류 분류: `APITimeoutError`, `AuthenticationError`, `RateLimitError` 등, 빈 답변은 `EmptyResponse`), `db_save_failed`, `request_failed`를 남긴다. 질문·답변·비밀번호·API 키는 로그에 남기지 않는다.
 
 ## 8. 디렉터리 구조
 
@@ -206,8 +208,8 @@ app/
   schemas.py       # 입력·출력 스키마
   errors.py        # 오류 코드·메시지·HTTP 상태
   logging.py       # JSON 로그
-  services/        # auth / chat / ai
-frontend/src/      # App, AuthPage, ChatPage, api, styles
+  services/        # auth / chat / ai / prompts / rate_limit
+frontend/src/      # App, AuthPage, AuthLoading, ChatPage, ChatMessages, useChatRequest, api, styles
 scripts/check_logs.sql
 docs/check-scenario.md  # 요구사항 점검 시나리오
 Dockerfile, compose.yaml
