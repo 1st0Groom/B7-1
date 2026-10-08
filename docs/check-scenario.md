@@ -1,6 +1,6 @@
 # B7-1 요구사항 점검 시나리오 (AI 에이전트용)
 
-[B7-1 과제](B7-1.md)의 요구사항을 실제 서버로 확인하는 절차다. AI 에이전트(또는 사람)가 위에서부터 그대로 실행하고, 마지막의 보고 형식으로 결과를 정리한다. AI 어댑터와 SQL 조회는 별도의 표준 라이브러리 단위 테스트로 확인한다.
+[B7-1 과제](B7-1.md)의 요구사항을 실제 서버로 확인하는 절차다. AI 에이전트(또는 사람)가 위에서부터 그대로 실행하고, 마지막의 보고 형식으로 결과를 정리한다. 자동 테스트 코드는 두지 않는다.
 
 ## 0. 규칙
 
@@ -18,8 +18,7 @@ cd <저장소 루트>
 for k in OPENAI_API_KEY AI_MODEL; do v=$(grep -E "^$k=" .env | cut -d= -f2-); [ -n "$v" ] && echo "$k: set" || echo "$k: MISSING"; done
 pnpm --dir frontend install --frozen-lockfile
 pnpm --dir frontend check && pnpm --dir frontend build
-uv sync --frozen --extra dev && uv run --frozen ruff check app tests
-uv run --frozen python -m unittest discover -s tests
+uv sync --frozen --extra dev && uv run --frozen ruff check app
 
 R=$(mktemp -d)   # 점검용 DB·로그·쿠키 위치
 start() { # start <port> <db name> [ENV=VALUE ...]

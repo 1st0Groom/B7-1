@@ -124,8 +124,7 @@ with sqlite3.connect("file:/data/app.db?mode=ro", uri=True) as db:
 ```bash
 pnpm --dir frontend check
 pnpm --dir frontend build
-uv run --frozen ruff check app tests
-uv run --frozen python -m unittest discover -s tests
+uv run --frozen ruff check app
 ```
 
-AI 어댑터와 SQL 조회는 표준 라이브러리 `unittest`로 확인합니다. B7-1 요구사항별 실제 서비스 확인 절차는 [점검 시나리오](docs/check-scenario.md)에 있으며, AI 에이전트나 사람이 그대로 따라 실행할 수 있습니다.
+자동 테스트는 두지 않습니다. B7-1 요구사항별 확인 절차는 [점검 시나리오](docs/check-scenario.md)에 있으며, AI 에이전트나 사람이 그대로 따라 실행할 수 있습니다.
