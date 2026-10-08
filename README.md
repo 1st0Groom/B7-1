@@ -7,8 +7,8 @@
 - 설계·ERD·API 예시: [설계 문서](docs/design.md)
 - 과제 기준: [B7-1](docs/B7-1.md)
 - 팀 역할·기여 기록: [팀 문서](docs/team.md)
-- **외부 서비스 URL: 배포 후 기록 필요**
-- **제출용 GitHub URL: 저장소 공개 범위 확인 후 기록 필요**
+- 외부 서비스 URL: http://3.38.152.93
+- 제출용 GitHub URL: https://github.com/codyssey-kr/B7-1
 
 ## 로컬 실행
 
@@ -44,9 +44,9 @@ uv run --frozen uvicorn app.main:create_app --factory --reload
 - 로그에는 질문·답변·비밀번호를 남기지 않습니다.
 - **비밀번호는 DB에 평문으로 저장되고 HTTP로 전송됩니다. 실제로 쓰는 비밀번호를 사용하지 마세요.**
 
-## 인스턴스 배포
+## 도커 실행
 
-Linux 인스턴스 1대와 Docker Engine + Compose가 필요합니다. 외부에서 80 포트로 접속할 수 있게 엽니다.
+Docker Engine과 Compose를 설치한 뒤 **저장소 루트**에서 실행합니다.
 
 ```bash
 cp .env.example .env   # OPENAI_API_KEY, AI_MODEL을 실제 값으로 설정합니다.
@@ -56,7 +56,7 @@ docker compose logs --tail=100 app
 
 `app` 컨테이너가 80 포트로 FastAPI를 제공하고 SQLite를 `app_data` 볼륨의 `/data/app.db`에 저장합니다. 서비스 URL은 `http://<인스턴스 공인 IP 또는 도메인>`입니다.
 
-업데이트할 때도 `docker compose up --build -d`를 다시 실행합니다. `docker compose down -v`는 DB 볼륨까지 삭제하므로 평소에는 사용하지 않습니다. 마이그레이션 도구가 없으므로 DB 스키마(`app/models.py`)를 바꾸면 DB를 초기화해야 하며 저장된 계정·대화가 모두 삭제됩니다. 로컬은 `data/app.db`를 지우고, 서버는 `docker compose down -v && docker compose up --build -d`를 실행합니다. 배포 후 외부 네트워크에서 가입·로그인·실제 AI 질문·재시작 후 기록 조회를 확인합니다.
+운영 서버 준비·업데이트·DB 초기화·배포 확인은 [배포 및 운영 문서](infra/README.md)를 참고하세요.
 
 ## API
 
@@ -84,10 +84,13 @@ curl -sS -b cookies.txt http://localhost:8000/api/me/chats
 
 `chats` 테이블에 사용자 ID, 생성 시각, 질문, 답변이 저장됩니다. `scripts/check_logs.sql`은 특정 사용자의 최근 대화 20건을 조회합니다.
 
+로컬에서는 저장소 루트에서 실행합니다.
+
 ```bash
 sqlite3 data/app.db '.parameter init' '.parameter set :user_id 1' '.read scripts/check_logs.sql'
-# 운영 서버: docker compose cp app:/data/app.db ./app.db 후 같은 명령을 app.db에 실행
 ```
+
+운영 서버의 조회 방법은 [운영 DB 조회](infra/README.md#운영-db-조회)를 참고하세요.
 
 ## 검증
 
