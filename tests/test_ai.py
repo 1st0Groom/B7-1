@@ -99,9 +99,7 @@ class OpenAIAdapterTests(unittest.IsolatedAsyncioTestCase):
             ai_model="gpt-5-mini",
             ai_timeout_seconds=30,
         )
-        response = SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content="  "))]
-        )
+        response = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="  "))])
 
         with patch("app.services.ai.AsyncOpenAI") as client_factory:
             client_factory.return_value.chat.completions.create = AsyncMock(return_value=response)

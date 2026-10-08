@@ -8,7 +8,7 @@
 - 과제 기준: [B7-1](docs/B7-1.md)
 - 팀 역할·기여 기록: [팀 문서](docs/team.md)
 - 외부 서비스 URL: http://3.38.152.93
-- **배포 검증(2026-10-08):** 외부 접속, 로그인 후 네이토 AI 응답, 앱 재시작 후 대화 기록 유지 확인
+- **배포 검증(2026-10-08, @1st0Groom 기록):** 외부 접속, 로그인 후 네이토 AI 응답, 앱 재시작 후 대화 기록 유지 확인
 - 제출용 GitHub URL: https://github.com/codyssey-kr/B7-1
 
 ## 로컬 실행
@@ -101,24 +101,31 @@ curl -sS -b cookies.txt http://localhost:8000/api/me/chats
 sqlite3 data/app.db '.parameter init' '.parameter set :user_id 1' '.read scripts/check_logs.sql'
 ```
 
-운영 EC2에서는 Docker 볼륨의 DB 사본을 임시 경로에 복사해 조회합니다. Amazon Linux 2023에서 `sqlite3` 명령이 없다면 먼저 CLI를 설치합니다.
+운영 서버에서는 저장소 루트에서 아래 명령을 실행합니다. 컨테이너의 Python으로 DB를 읽기 전용으로 열어 조회하므로 실행 중인 DB 파일을 복사하거나 서버에 `sqlite3` CLI를 추가 설치할 필요가 없습니다. 끝의 `1`은 조회할 계정의 `user_id`로 바꾸며, 첫 출력의 `users` 목록에서 ID를 확인할 수 있습니다.
 
 ```bash
-sudo dnf install -y sqlite
-docker compose cp app:/data/app.db /tmp/b7-1-app.db
-sqlite3 -header -column /tmp/b7-1-app.db 'SELECT id, username FROM users;'
-# 아래 1은 조회할 계정의 실제 user_id로 바꿉니다.
-sqlite3 -header -column /tmp/b7-1-app.db '.parameter init' '.parameter set :user_id 1' '.read scripts/check_logs.sql'
+docker compose exec -T app python -c '
+import sqlite3
+import sys
+
+with sqlite3.connect("file:/data/app.db?mode=ro", uri=True) as db:
+    print("users:", db.execute("SELECT id, username FROM users").fetchall())
+    rows = db.execute(sys.stdin.read(), {"user_id": int(sys.argv[1])})
+    print(*(column[0] for column in rows.description), sep="\t")
+    for row in rows:
+        print(*row, sep="\t")
+' 1 < scripts/check_logs.sql
 ```
 
-DB 사본에는 계정과 대화 내용이 포함되므로 저장소에 추가하거나 외부에 공유하지 않습니다.
+조회 결과에는 사용자와 대화 내용이 포함되므로 외부에 공유하지 않습니다.
 
 ## 검증
 
 ```bash
 pnpm --dir frontend check
 pnpm --dir frontend build
-uv run --frozen ruff check app
+uv run --frozen ruff check app tests
+uv run --frozen python -m unittest discover -s tests
 ```
 
-자동 테스트는 두지 않습니다. B7-1 요구사항별 확인 절차는 [점검 시나리오](docs/check-scenario.md)에 있으며, AI 에이전트나 사람이 그대로 따라 실행할 수 있습니다.
+AI 어댑터와 SQL 조회는 표준 라이브러리 `unittest`로 확인합니다. B7-1 요구사항별 실제 서비스 확인 절차는 [점검 시나리오](docs/check-scenario.md)에 있으며, AI 에이전트나 사람이 그대로 따라 실행할 수 있습니다.
