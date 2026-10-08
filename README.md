@@ -19,7 +19,7 @@ npm install --global pnpm@12.3.4
 pnpm --dir frontend install --frozen-lockfile
 pnpm --dir frontend build
 uv sync --frozen --extra dev
-cp .env.example .env   # OPENAI_API_KEY와 AI_MODEL을 설정합니다.
+cp .env.example .env   # .env 값을 설정합니다.
 mkdir -p data
 uv run --frozen uvicorn app.main:create_app --factory --reload
 ```
@@ -49,7 +49,7 @@ uv run --frozen uvicorn app.main:create_app --factory --reload
 Docker Engine과 Compose를 설치한 뒤 **저장소 루트**에서 실행합니다.
 
 ```bash
-cp .env.example .env   # OPENAI_API_KEY, AI_MODEL을 실제 값으로 설정합니다.
+cp .env.example .env   # .env 값을 설정합니다.
 docker compose up --build -d
 docker compose logs --tail=100 app
 ```
