@@ -8,7 +8,6 @@
 - 과제 기준: [B7-1](docs/B7-1.md)
 - 팀 역할·기여 기록: [팀 문서](docs/team.md)
 - 외부 서비스 URL: http://3.38.152.93
-- **배포 검증(2026-10-08, @1st0Groom 기록):** 외부 접속, 로그인 후 네이토 AI 응답, 앱 재시작 후 대화 기록 유지 확인
 - 제출용 GitHub URL: https://github.com/codyssey-kr/B7-1
 
 ## 로컬 실행
@@ -45,19 +44,9 @@ uv run --frozen uvicorn app.main:create_app --factory --reload
 - 로그에는 질문·답변·비밀번호를 남기지 않습니다.
 - **비밀번호는 DB에 평문으로 저장되고 HTTP로 전송됩니다. 실제로 쓰는 비밀번호를 사용하지 마세요.**
 
-## 인스턴스 배포
+## 도커 실행
 
-Linux 인스턴스 1대와 Docker Engine + Compose가 필요합니다. 외부에서 80 포트로 접속할 수 있게 엽니다.
-
-Amazon Linux 2023 x86_64에서 `docker compose up --build`가 Buildx 0.17 이상을 요구하면 다음 플러그인을 설치합니다.
-
-```bash
-mkdir -p ~/.docker/cli-plugins
-curl -fSL https://github.com/docker/buildx/releases/download/v0.37.2/buildx-v0.37.2.linux-amd64 \
-  -o ~/.docker/cli-plugins/docker-buildx
-chmod +x ~/.docker/cli-plugins/docker-buildx
-docker buildx version
-```
+Docker Engine과 Compose를 설치한 뒤 **저장소 루트**에서 실행합니다.
 
 ```bash
 cp .env.example .env   # OPENAI_API_KEY, AI_MODEL을 실제 값으로 설정합니다.
@@ -67,7 +56,7 @@ docker compose logs --tail=100 app
 
 `app` 컨테이너가 80 포트로 FastAPI를 제공하고 SQLite를 `app_data` 볼륨의 `/data/app.db`에 저장합니다. 서비스 URL은 `http://<인스턴스 공인 IP 또는 도메인>`입니다.
 
-업데이트할 때도 `docker compose up --build -d`를 다시 실행합니다. `docker compose down -v`는 DB 볼륨까지 삭제하므로 평소에는 사용하지 않습니다. 마이그레이션 도구가 없으므로 DB 스키마(`app/models.py`)를 바꾸면 DB를 초기화해야 하며 저장된 계정·대화가 모두 삭제됩니다. 로컬은 `data/app.db`를 지우고, 서버는 `docker compose down -v && docker compose up --build -d`를 실행합니다. 배포 후 외부 네트워크에서 가입·로그인·실제 AI 질문·재시작 후 기록 조회를 확인합니다.
+운영 서버 준비·업데이트·DB 초기화·배포 확인은 [배포 및 운영 문서](infra/README.md)를 참고하세요.
 
 ## API
 
@@ -101,23 +90,7 @@ curl -sS -b cookies.txt http://localhost:8000/api/me/chats
 sqlite3 data/app.db '.parameter init' '.parameter set :user_id 1' '.read scripts/check_logs.sql'
 ```
 
-운영 서버에서는 저장소 루트에서 아래 명령을 실행합니다. 컨테이너의 Python으로 DB를 읽기 전용으로 열어 조회하므로 실행 중인 DB 파일을 복사하거나 서버에 `sqlite3` CLI를 추가 설치할 필요가 없습니다. 끝의 `1`은 조회할 계정의 `user_id`로 바꾸며, 첫 출력의 `users` 목록에서 ID를 확인할 수 있습니다.
-
-```bash
-docker compose exec -T app python -c '
-import sqlite3
-import sys
-
-with sqlite3.connect("file:/data/app.db?mode=ro", uri=True) as db:
-    print("users:", db.execute("SELECT id, username FROM users").fetchall())
-    rows = db.execute(sys.stdin.read(), {"user_id": int(sys.argv[1])})
-    print(*(column[0] for column in rows.description), sep="\t")
-    for row in rows:
-        print(*row, sep="\t")
-' 1 < scripts/check_logs.sql
-```
-
-조회 결과에는 사용자와 대화 내용이 포함되므로 외부에 공유하지 않습니다.
+운영 서버의 조회 방법은 [운영 DB 조회](infra/README.md#운영-db-조회)를 참고하세요.
 
 ## 검증
 
