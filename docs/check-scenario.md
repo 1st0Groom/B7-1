@@ -1,12 +1,12 @@
 # B7-1 요구사항 점검 시나리오 (AI 에이전트용)
 
-[B7-1 과제](B7-1.md)의 요구사항을 실제 서버로 확인하는 절차다. AI 에이전트(또는 사람)가 위에서부터 그대로 실행하고, 마지막의 보고 형식으로 결과를 정리한다. Chat Completions 요청 형식은 별도의 표준 라이브러리 단위 테스트로 확인한다.
+[B7-1 과제](B7-1.md)의 요구사항을 실제 서버로 확인하는 절차다. AI 에이전트(또는 사람)가 위에서부터 그대로 실행하고, 마지막의 보고 형식으로 결과를 정리한다. 자동 테스트 코드는 두지 않는다.
 
 ## 0. 규칙
 
 - 사용자의 개발 서버(`:8000`, `:5173`)와 `data/app.db`는 건드리지 않는다. 점검용 서버는 임시 디렉터리 DB와 `:8010`~`:8013` 포트를 쓴다. 포트가 사용 중이면 다른 빈 포트를 쓴다.
 - `.env`의 API 키 값은 출력하지 않는다. 설정 여부만 확인한다.
-- 실제 네이토 API 호출이 발생해 계정의 토큰 사용량이 늘 수 있다. 그 외 실패 경로는 키·시간 제한을 바꿔 확인한다.
+- 실제 OpenAI 호출이 8회(8단계 브라우저 확인 포함 시 9회) 발생한다(소량 비용). 그 외 실패 경로는 키·시간 제한을 바꿔 비용 없이 확인한다.
 - 테스트 계정에는 임시 비밀번호만 쓴다. 비밀번호는 평문 저장된다.
 - zsh에서 반복 변수 이름으로 `path`를 쓰지 않는다(`PATH`가 덮여 `curl`을 찾지 못한다).
 - 끝나면 자신이 띄운 서버만 종료한다.
@@ -15,11 +15,10 @@
 
 ```bash
 cd <저장소 루트>
-for k in AI_API_KEY AI_BASE_URL AI_MODEL; do v=$(grep -E "^$k=" .env | cut -d= -f2-); [ -n "$v" ] && echo "$k: set" || echo "$k: MISSING"; done
+for k in OPENAI_API_KEY AI_MODEL; do v=$(grep -E "^$k=" .env | cut -d= -f2-); [ -n "$v" ] && echo "$k: set" || echo "$k: MISSING"; done
 pnpm --dir frontend install --frozen-lockfile
 pnpm --dir frontend check && pnpm --dir frontend build
 uv sync --frozen --extra dev && uv run --frozen ruff check app
-uv run --frozen python -m unittest discover -s tests
 
 R=$(mktemp -d)   # 점검용 DB·로그·쿠키 위치
 start() { # start <port> <db name> [ENV=VALUE ...]
@@ -31,7 +30,7 @@ start() { # start <port> <db name> [ENV=VALUE ...]
 }
 start 8010 main                                   # 정상 서버
 start 8011 timeout AI_TIMEOUT_SECONDS=0.01        # AI 시간 초과
-start 8012 badkey AI_API_KEY=invalid-test        # AI 호출 실패
+start 8012 badkey OPENAI_API_KEY=sk-invalid-test  # AI 호출 실패
 start 8013 dbfail                                 # DB 저장 실패
 
 B=http://127.0.0.1:8010; J='Content-Type: application/json'
@@ -59,7 +58,7 @@ chk "blank question"  "$(code -b $R/a.txt $B/api/chat -H "$J" -d '{"question":" 
 chk "2001-char question" "$(code -b $R/a.txt $B/api/chat -H "$J" -d "{\"question\":\"$(python3 -c 'print("x"*2001)')\"}")" 422
 ```
 
-## 4. AI 응답과 문맥 유지 (4.3) — 실제 네이토 API 호출 2회
+## 4. AI 응답과 문맥 유지 (4.3) — 실제 OpenAI 호출 2회
 
 ```bash
 curl -s -b $R/a.txt $B/api/chat -H "$J" -d '{"question":"배포 방법을 한 문장으로 알려줘."}'; echo
@@ -85,7 +84,7 @@ sqlite3 -header -column $R/main.db '.parameter init' '.parameter set :user_id 1'
 
 통과 기준: 모든 `chk` PASS. B의 답변에 A의 질문 내용이 없다. SQL 결과에 userA의 2건(사용자·시각·질문·답변)이 나온다.
 
-## 5-1. 다중 사용자 동시 대화 (4.3, 4.4) — 실제 네이토 API 호출 4회
+## 5-1. 다중 사용자 동시 대화 (4.3, 4.4) — 실제 OpenAI 호출 4회
 
 두 사용자가 동시에 서로 다른 주제로 질문하고, 이어서 동시에 후속 질문한다.
 
@@ -112,7 +111,7 @@ for p in 8011 8012 8013; do
   curl -s -o /dev/null http://127.0.0.1:$p/api/auth/signup -H "$J" -d '{"username":"u","password":"p"}'
   curl -s -o /dev/null -c $R/c$p.txt http://127.0.0.1:$p/api/auth/login -H "$J" -d '{"username":"u","password":"p"}'
 done
-# DB 저장 실패: chats 삽입을 막는 트리거 (AI 호출은 성공 — 실제 네이토 API 호출 1회)
+# DB 저장 실패: chats 삽입을 막는 트리거 (AI 호출은 성공 — 실제 OpenAI 호출 1회)
 sqlite3 $R/dbfail.db "CREATE TRIGGER block_insert BEFORE INSERT ON chats BEGIN SELECT RAISE(ABORT, 'forced'); END;"
 
 curl -s -b $R/c8011.txt -w ' HTTP %{http_code}\n' http://127.0.0.1:8011/api/chat -H "$J" -d '{"question":"긴 글 요약해줘"}'
@@ -123,7 +122,7 @@ for p in 8011 8012 8013; do echo ":$p alive $(code http://127.0.0.1:$p/) saved $
 
 | 서버 | 기대 응답 | 기대 로그 |
 | --- | --- | --- |
-| `:8011` 시간 초과 | `504 AI_TIMEOUT`, “현재 응답이 지연되고 있어요…” | `ai_call_failed` (`code: AI_TIMEOUT`) |
+| `:8011` 시간 초과 | `504 AI_TIMEOUT`, “현재 응답이 지연되고 있어요…” | `ai_provider_error` (`APITimeoutError`), `ai_call_failed` (`code: AI_TIMEOUT`, `latency_ms`) |
 | `:8012` 잘못된 키 | `502 AI_UNAVAILABLE` | `ai_provider_error` (`AuthenticationError`, 401), `ai_call_failed` |
 | `:8013` DB 실패 | `503 DB_UNAVAILABLE` | `ai_call_success` 다음 `db_save_failed` |
 
@@ -135,13 +134,13 @@ for p in 8011 8012 8013; do echo ":$p alive $(code http://127.0.0.1:$p/) saved $
 rid=$(grep '"event": "ai_call_success"' $R/main.log | head -1 | grep -o '"request_id": "[a-f0-9]*"')
 grep "$rid" $R/main.log | grep -oE '"event": "[a-z_]+"'
 grep -hoE '"event": "(ai_call_failed|ai_provider_error|db_save_failed)"[^}]*' $R/timeout.log $R/badkey.log $R/dbfail.log
-key_tail=$(grep -E '^AI_API_KEY=' .env | cut -d= -f2- | tail -c 12)
+key_tail=$(grep -E '^OPENAI_API_KEY=' .env | cut -d= -f2- | tail -c 12)
 for s in "$key_tail" test-a test-b "배포 방법"; do grep -c -- "$s" $R/*.log | awk -F: '{n+=$2} END {print n}'; done
 ```
 
 통과 기준: 성공 요청 하나에 `request_received` → `ai_call_start` → `ai_call_success`(`latency_ms` 포함) → `db_save_success`가 같은 `request_id`로 남는다. 실패 이벤트가 6단계 표와 같다. 마지막 반복의 출력이 모두 `0`이다(API 키·비밀번호·질문 내용이 로그에 없음).
 
-## 8. 웹 화면 (4.1, 4.2) — 브라우저, 실제 네이토 API 호출 1회
+## 8. 웹 화면 (4.1, 4.2) — 브라우저, 실제 OpenAI 호출 1회
 
 브라우저 자동화 도구(Claude in Chrome, Playwright 등)로 `http://localhost:8010/`을 연다.
 
@@ -150,7 +149,9 @@ for s in "$key_tail" test-a test-b "배포 방법"; do grep -c -- "$s" $R/*.log 
 | 첫 접속 | 로그인 폼(아이디·비밀번호·“로그인”·“회원가입으로”) |
 | 없는 계정으로 로그인 | 폼 아래 “아이디 또는 비밀번호를 확인해 주세요.” |
 | “회원가입으로” → 새 아이디로 “회원가입” | 채팅 화면(질문 입력창, “질문 보내기”, “로그아웃”) |
-| 질문 입력 후 “질문 보내기” | 대기 중 “답변을 생성하고 있어요…”와 비활성 버튼 → 질문·답변·시각이 카드로 표시 |
+| 질문 입력 후 “질문 보내기” | 대기 중 질문과 “답변을 만들고 있어요...” 표시, 입력창·전송 버튼 비활성화 → 질문·답변·시각이 한 번만 기록에 표시 |
+| A 계정의 질문 대기 중 로그아웃 → B 계정 로그인 (네트워크 대기·빠른 응답의 표시 대기 각각 확인) | B의 기록만 보이며, A의 늦은 응답·오류가 B의 화면이나 로그인 상태를 바꾸지 않음 |
+| “동작 줄이기” 설정을 켜고 로그인·질문 전송 | 로딩·답변 대기 스피너가 회전하지 않고 자동 스크롤이 애니메이션 없이 이동 |
 | 새로고침 | 같은 대화가 그대로 보인다 |
 | “로그아웃” 후 새로고침 | 로그인 폼 |
 | 콘솔 | 오류 없음 |

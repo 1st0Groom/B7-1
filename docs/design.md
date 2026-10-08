@@ -26,7 +26,7 @@ flowchart LR
     A --> D[(SQLite)]
     C --> D
     C --> G[AI 어댑터]
-    G -->|서버 API 키| E[네이토 Chat Completions API]
+    G -->|서버 API 키| E[OpenAI API]
     W --> L[JSON 서버 로그]
 ```
 
@@ -36,7 +36,8 @@ flowchart LR
 | 라우트 | `app/routes.py` | API 경로, 입력 검증, 로그인 확인 의존성, 세션 쿠키 |
 | 인증 서비스 | `app/services/auth.py` | 가입, 비밀번호 검증, 세션 발급·조회·삭제 |
 | 채팅 서비스 | `app/services/chat.py` | 최근 문맥 조회 → AI 호출 → 문답 저장, 내 로그 조회 |
-| AI 어댑터 | `app/services/ai.py` | 네이토 Chat Completions 호출, 시간 제한, 오류 분류 |
+| AI 어댑터 | `app/services/ai.py` | OpenAI 호출, 시간 제한, 오류 분류 |
+| 프롬프트 구성 | `app/services/prompts.py` | 시스템 지침, 최근 문답, 현재 질문을 AI에 보낼 메시지로 조립 |
 | DB | `app/models.py`, `app/database.py` | 테이블 정의, 세션, 저장 성공·실패 로그 |
 | 화면 | `frontend/src/` | 로그인·회원가입 화면, 채팅 화면 |
 
@@ -83,6 +84,17 @@ erDiagram
 
 AI 응답에 성공한 문답만 `chats`에 저장한다. 시간은 UTC로 저장하고 API는 `Z`가 붙은 ISO 8601로 반환한다.
 
+대화 로그를 저장하는 이유는 네 가지다.
+
+| 목적 | 쓰는 곳 |
+| --- | --- |
+| 복습 | 사용자가 다시 로그인해 이전 질문과 답변을 확인한다 (`GET /api/me/chats`, 채팅 화면) |
+| 문맥 유지 | 같은 사용자의 최근 문답을 다음 질문과 함께 AI에 보내 이어지는 질문에 답하게 한다 (`chat.py`의 `CONTEXT_TURNS`) |
+| 추적·운영 | 문제가 생긴 사용자와 시각을 기준으로 실제 질문과 답변을 확인한다 (`scripts/check_logs.sql`). 서버 로그에는 질문·답변을 남기지 않으므로 내용 확인은 DB에서만 한다 |
+| 개선 | 실제 질문 유형과 답변을 보고 시스템 프롬프트와 문맥 설정을 고칠 근거로 쓴다 |
+
+실패한 요청은 저장하지 않는다. 빈 답변이나 오류가 다음 질문의 문맥에 섞이지 않게 하기 위해서다.
+
 ## 5. 질문 처리와 문맥 유지
 
 ```mermaid
@@ -90,7 +102,7 @@ sequenceDiagram
     participant B as 브라우저
     participant F as FastAPI
     participant D as SQLite
-    participant A as 네이토 Chat Completions API
+    participant A as OpenAI API
     B->>F: POST /api/chat
     F->>D: 세션 확인, 최근 문답 5개 조회
     F->>A: 시스템 지침 + 최근 문답 + 현재 질문
@@ -99,13 +111,17 @@ sequenceDiagram
         F->>D: 질문·답변 저장
         F-->>B: 200 저장된 문답 (저장 실패 시 503)
     else AI 실패 또는 시간 초과
-        F-->>B: 502 / 504 오류 안내, 저장하지 않음
+        F-->>B: 502 / 503 / 504 오류 안내, 저장하지 않음
     end
 ```
 
-- **문맥 전략**: 같은 사용자의 최근 문답 최대 5쌍을 오래된 순서로 보내고 현재 질문을 붙인다.
+- **문맥 전략**: 같은 사용자의 최근 문답 최대 5쌍을 오래된 순서로 보내고 현재 질문을 붙인다. 문답의 글자 수 합계가 4,000자를 넘으면 오래된 문답부터 뺀다.
+- **답변 방식**: 시스템 지침은 개발 초보자 기준이다. 핵심 답을 먼저 말하고, 용어는 처음 나올 때 풀어 쓰고, 코드 예시는 짧게 들고, 확실하지 않으면 추측하지 않고 솔직하게 말하도록 한다.
 - **입력 검증**: 질문은 앞뒤 공백을 제거한 뒤 1~2,000자여야 한다. 위반 시 `422`이며 AI를 호출하지 않는다.
-- **시간 제한**: AI API 호출은 `AI_TIMEOUT_SECONDS`(기본 30초) 제한, 자동 재시도 0회.
+- **질문 횟수 제한**: 인증·입력 검증을 통과한 요청을 사용자별 최근 60초 동안 최대 10회 허용한다. 초과 시 대화 문맥 조회·AI 호출 전에 `429 CHAT_RATE_LIMITED`를 반환한다. 허용 후 AI·DB 처리에 실패한 요청도 횟수에 포함되며, 제한으로 거절된 요청은 횟수에 추가하지 않는다.
+- **시간 제한**: OpenAI 호출은 `AI_TIMEOUT_SECONDS`(기본 30초) 제한, 자동 재시도 0회.
+
+질문 횟수 기록은 서버 프로세스 메모리에 저장하므로 재시작하면 초기화되고, 여러 프로세스 간에는 공유되지 않는다. 비활성 사용자의 만료 기록 정리는 후속 개선으로 남긴다.
 
 ## 6. API 명세
 
@@ -157,23 +173,28 @@ Cookie: session=<로그인 시 발급된 토큰>
 | 잘못된 아이디·비밀번호 | `401 INVALID_CREDENTIALS` |
 | 아이디 중복 | `409 USERNAME_ALREADY_EXISTS` |
 | 입력 검증 실패(빈 질문·길이 초과, 빈 아이디·비밀번호) | `422 VALIDATION_ERROR` |
+| 사용자별 질문 횟수 제한 초과 | `429 CHAT_RATE_LIMITED` |
 | AI 시간 초과 | `504 AI_TIMEOUT` |
-| AI 인증·요청 제한·네트워크 오류·빈 응답 | `502 AI_UNAVAILABLE` |
+| AI 인증·네트워크 오류·빈 응답 | `502 AI_UNAVAILABLE` |
+| AI의 일시적인 요청 제한 | `503 AI_RATE_LIMITED` |
+| AI 크레딧 소진·지출 한도·사용량 한도 초과 | `503 AI_QUOTA_EXCEEDED` |
 | DB 오류 | `503 DB_UNAVAILABLE` |
 | 그 밖의 서버 오류 | `500 INTERNAL_ERROR` |
 
 앱에서 발생한 예외는 모두 위 형식의 JSON 응답으로 바뀌므로 AI나 DB가 실패해도 서버는 계속 동작한다. 없는 경로·잘못된 HTTP 메서드는 FastAPI 기본 응답(`404`/`405`, `{"detail": ...}`)을 그대로 쓴다. 화면은 오류 메시지를 입력창 아래에 표시하고 입력한 질문을 유지한다.
 
+OpenAI의 `429`는 `error.code`와 `error.type`으로 원인을 구분한다. 크레딧·지출·사용량 한도 오류는 관리자 확인을 안내하고, 일시적인 요청 제한은 잠시 후 재시도를 안내한다. 자동 재시도는 하지 않는다. 오류 구분은 [OpenAI 공식 오류 문서](https://developers.openai.com/api/docs/guides/error-codes)를 따른다.
+
 서버 로그는 요청마다 같은 `request_id`가 붙는 JSON 한 줄로 출력한다. 실제 로그에는 `time`(UTC) 필드도 있으며 아래 예시에서는 생략했다.
 
 ```text
 {"event": "request_received", "request_id": "abc123", "method": "POST", "path": "/api/chat"}
-{"event": "ai_call_start", "request_id": "abc123", "user_id": 12}
+{"event": "ai_call_start", "request_id": "abc123", "user_id": 12, "context_turns": 2}
 {"event": "ai_call_success", "request_id": "abc123", "user_id": 12, "latency_ms": 1240}
 {"event": "db_save_success", "request_id": "abc123", "phase": "chat", "user_id": 12}
 ```
 
-실패 시에는 `ai_call_failed`(오류 코드), `ai_provider_error`(SDK 오류 분류), `db_save_failed`, `request_failed`를 남긴다. 질문·답변·비밀번호·API 키는 로그에 남기지 않는다.
+실패 시에는 `chat_rate_limited`(사용자별 질문 제한), `ai_call_failed`(오류 코드, 걸린 시간 `latency_ms`), `ai_provider_error`(OpenAI 오류 분류: `APITimeoutError`, `AuthenticationError`, `RateLimitError` 등, 빈 답변은 `EmptyResponse`), `db_save_failed`, `request_failed`를 남긴다. 질문·답변·비밀번호·API 키는 로그에 남기지 않는다.
 
 ## 8. 디렉터리 구조
 
@@ -187,8 +208,8 @@ app/
   schemas.py       # 입력·출력 스키마
   errors.py        # 오류 코드·메시지·HTTP 상태
   logging.py       # JSON 로그
-  services/        # auth / chat / ai
-frontend/src/      # App, AuthPage, ChatPage, api, styles
+  services/        # auth / chat / ai / prompts / rate_limit
+frontend/src/      # App, AuthPage, AuthLoading, ChatPage, ChatMessages, useChatRequest, api, styles
 scripts/check_logs.sql
 docs/check-scenario.md  # 요구사항 점검 시나리오
 Dockerfile, compose.yaml
