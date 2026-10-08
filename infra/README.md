@@ -61,7 +61,7 @@ PR이 공개 저장소의 기본 브랜치에 머지된 뒤 저장소를 내려�
 git clone https://github.com/codyssey-kr/B7-1.git
 cd B7-1
 cp .env.example .env
-nano .env   # OPENAI_API_KEY와 AI_MODEL을 설정합니다.
+nano .env   # .env 값을 설정합니다.
 docker compose up --build -d
 docker compose ps
 docker compose logs --tail=100 app
