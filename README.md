@@ -31,7 +31,7 @@ uv run --frozen uvicorn app.main:create_app --factory --reload
 | 이름 | 기본값 / 용도 |
 | --- | --- |
 | `OPENAI_API_KEY` | 필수. 서버에서만 사용하는 OpenAI API 키 |
-| `OPENAI_BASE_URL` | 선택. 미설정·빈 값은 `https://api.openai.com/v1`. Responses API 지원 서버의 기본 URL(`/responses` 제외) |
+| `OPENAI_BASE_URL` | 선택. 미설정·빈 값은 `https://api.openai.com/v1`. Chat Completions API 지원 서버의 기본 URL(`/chat/completions` 제외) |
 | `AI_MODEL` | 필수. 계정에서 사용 가능한 OpenAI 모델 ID |
 | `AI_TIMEOUT_SECONDS` | `30`; OpenAI 호출 시간 제한(초), 자동 재시도 없음 |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./data/app.db`; Compose는 `/data/app.db` |

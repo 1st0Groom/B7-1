@@ -18,7 +18,7 @@ class OpenAIAdapter:
     async def generate(self, history, question):
         messages = build_messages(history, question)
         try:
-            result = await self.client.responses.create(model=self.model, input=messages)
+            result = await self.client.chat.completions.create(model=self.model, messages=messages)
         except APITimeoutError:
             event("ai_provider_error", category="APITimeoutError", status_code=None)
             raise AppError("AI_TIMEOUT") from None
@@ -40,7 +40,8 @@ class OpenAIAdapter:
                 status_code=getattr(exc, "status_code", None),
             )
             raise AppError("AI_UNAVAILABLE") from None
-        answer = result.output_text.strip()
+        content = result.choices[0].message.content if result.choices else None
+        answer = (content or "").strip()
         if not answer:
             event("ai_provider_error", category="EmptyResponse", status_code=None)
             raise AppError("AI_UNAVAILABLE")
