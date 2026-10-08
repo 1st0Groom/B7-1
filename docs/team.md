@@ -5,7 +5,7 @@
 | 팀원 | 담당 기능 | 개인 작업 요약 | 대표 커밋 | PR / 검토 링크 |
 | --- | --- | --- | --- | --- |
 | 미정 | 인증·세션·접근 제어 | 미작성 | 미작성 | 미작성 |
-| 미정 | 대화 API·DB·OpenAI | 미작성 | 미작성 | 미작성 |
+| @SeouliteParker | AI 채팅 (질문 처리·문맥 구성·OpenAI 호출·대화 로그) | AI 호출 실패 원인·소요 시간 로그 추가, 문맥 글자 수 상한(4,000자) 적용, 시스템 프롬프트를 `prompts.py`로 분리, 개발 초보자 기준 시스템 프롬프트 개선 | `203d03e`, `c5140d1`, `47d9c66`, `4c729be` | [#1](https://github.com/codyssey-kr/B7-1/pull/1), [#2](https://github.com/codyssey-kr/B7-1/pull/2), [#3](https://github.com/codyssey-kr/B7-1/pull/3), [#6](https://github.com/codyssey-kr/B7-1/pull/6) |
 | 미정 | 화면·입력·오류 처리 | 미작성 | 미작성 | 미작성 |
 | 미정 | 배포·로그·통합 검증 | 미작성 | 미작성 | 미작성 |
 
